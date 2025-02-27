@@ -26,7 +26,9 @@ import {
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle
+  DialogTitle,
+  Chip,
+  Tooltip
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -35,6 +37,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
+import SortIcon from '@mui/icons-material/Sort';
+import FilterListIcon from '@mui/icons-material/FilterList';
 
 function DataInput({ categories, salesData, setSalesData }) {
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -44,26 +48,69 @@ function DataInput({ categories, salesData, setSalesData }) {
   const [success, setSuccess] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [editCategory, setEditCategory] = useState('');
   const [tabValue, setTabValue] = useState(0);
-  const [filteredData, setFilteredData] = useState([]);
+  const [tableData, setTableData] = useState([]);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importData, setImportData] = useState('');
   const fileInputRef = useRef(null);
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [sortField, setSortField] = useState('date');
+  const [sortDirection, setSortDirection] = useState('asc');
 
-  // 選択されたカテゴリーのデータを表形式に変換
+  // すべてのカテゴリーのデータを統合して表形式に変換
   useEffect(() => {
-    if (selectedCategory && salesData[selectedCategory]) {
-      const tableData = Object.entries(salesData[selectedCategory]).map(([date, qty]) => ({
-        id: date,
-        date,
-        quantity: qty
-      })).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const allData = [];
+    
+    // すべてのカテゴリーのデータを1つの配列に統合
+    Object.entries(salesData).forEach(([category, categoryData]) => {
+      Object.entries(categoryData).forEach(([date, qty]) => {
+        allData.push({
+          id: `${category}-${date}`,
+          category,
+          date,
+          quantity: qty
+        });
+      });
+    });
+    
+    // データをソート
+    const sortedData = sortData(allData, sortField, sortDirection);
+    
+    // フィルタリング
+    const filteredData = filterCategory === 'all' 
+      ? sortedData 
+      : sortedData.filter(item => item.category === filterCategory);
+    
+    setTableData(filteredData);
+  }, [salesData, filterCategory, sortField, sortDirection]);
+
+  // データのソート関数
+  const sortData = (data, field, direction) => {
+    return [...data].sort((a, b) => {
+      let comparison = 0;
       
-      setFilteredData(tableData);
+      if (field === 'date') {
+        comparison = new Date(a.date) - new Date(b.date);
+      } else if (field === 'category') {
+        comparison = a.category.localeCompare(b.category);
+      } else if (field === 'quantity') {
+        comparison = a.quantity - b.quantity;
+      }
+      
+      return direction === 'asc' ? comparison : -comparison;
+    });
+  };
+
+  // ソート方向を切り替える
+  const toggleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      setFilteredData([]);
+      setSortField(field);
+      setSortDirection('asc');
     }
-  }, [selectedCategory, salesData]);
+  };
 
   const handleAddData = () => {
     try {
@@ -78,19 +125,31 @@ function DataInput({ categories, salesData, setSalesData }) {
         
         // 編集モードの場合は古いデータを削除
         if (editMode && editId) {
-          const newCategoryData = { ...salesData[selectedCategory] };
-          delete newCategoryData[editId];
+          // 編集前のカテゴリーと日付を取得
+          const [oldCategory, oldDate] = editId.split('-');
           
-          setSalesData({
-            ...salesData,
-            [selectedCategory]: {
-              ...newCategoryData,
-              [dateKey]: parsedQuantity
+          // 古いデータを削除
+          const newSalesData = { ...salesData };
+          if (newSalesData[oldCategory] && newSalesData[oldCategory][oldDate]) {
+            delete newSalesData[oldCategory][oldDate];
+            
+            // カテゴリーが空になった場合は削除
+            if (Object.keys(newSalesData[oldCategory]).length === 0) {
+              delete newSalesData[oldCategory];
             }
-          });
+          }
           
+          // 新しいデータを追加
+          if (!newSalesData[selectedCategory]) {
+            newSalesData[selectedCategory] = {};
+          }
+          
+          newSalesData[selectedCategory][dateKey] = parsedQuantity;
+          
+          setSalesData(newSalesData);
           setEditMode(false);
           setEditId(null);
+          setEditCategory('');
           setSuccess('データを更新しました');
         } else {
           // 新規追加
@@ -115,24 +174,28 @@ function DataInput({ categories, salesData, setSalesData }) {
     }
   };
 
-  const handleEdit = (date, qty) => {
+  const handleEdit = (category, date, qty) => {
     setEditMode(true);
-    setEditId(date);
+    setEditId(`${category}-${date}`);
+    setEditCategory(category);
+    setSelectedCategory(category);
     setSelectedDate(new Date(date));
     setQuantity(qty.toString());
     setTabValue(0); // 入力フォームタブに切り替え
   };
 
-  const handleDelete = (date) => {
+  const handleDelete = (category, date) => {
     try {
-      if (selectedCategory && salesData[selectedCategory]) {
-        const newCategoryData = { ...salesData[selectedCategory] };
-        delete newCategoryData[date];
+      if (salesData[category] && salesData[category][date]) {
+        const newSalesData = { ...salesData };
+        delete newSalesData[category][date];
         
-        setSalesData({
-          ...salesData,
-          [selectedCategory]: newCategoryData
-        });
+        // カテゴリーが空になった場合は削除
+        if (Object.keys(newSalesData[category]).length === 0) {
+          delete newSalesData[category];
+        }
+        
+        setSalesData(newSalesData);
         setSuccess('データを削除しました');
       }
     } catch (error) {
@@ -144,6 +207,7 @@ function DataInput({ categories, salesData, setSalesData }) {
   const handleCancelEdit = () => {
     setEditMode(false);
     setEditId(null);
+    setEditCategory('');
     setQuantity('');
     setSelectedDate(null);
   };
@@ -163,19 +227,19 @@ function DataInput({ categories, salesData, setSalesData }) {
   // CSVデータをエクスポート
   const handleExportCSV = () => {
     try {
-      if (!selectedCategory || !salesData[selectedCategory]) {
+      if (tableData.length === 0) {
         setError('エクスポートするデータがありません');
         return;
       }
 
-      const csvData = filteredData.map(row => `${row.date},${row.quantity}`).join('\n');
-      const csvContent = `date,quantity\n${csvData}`;
+      const csvData = tableData.map(row => `${row.category},${row.date},${row.quantity}`).join('\n');
+      const csvContent = `category,date,quantity\n${csvData}`;
       
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `${selectedCategory}_data.csv`);
+      link.setAttribute('download', `sales_data.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -191,17 +255,17 @@ function DataInput({ categories, salesData, setSalesData }) {
   // JSONデータをエクスポート
   const handleExportJSON = () => {
     try {
-      if (!selectedCategory || !salesData[selectedCategory]) {
+      if (Object.keys(salesData).length === 0) {
         setError('エクスポートするデータがありません');
         return;
       }
 
-      const jsonData = JSON.stringify(salesData[selectedCategory], null, 2);
+      const jsonData = JSON.stringify(salesData, null, 2);
       const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `${selectedCategory}_data.json`);
+      link.setAttribute('download', `sales_data.json`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -216,10 +280,6 @@ function DataInput({ categories, salesData, setSalesData }) {
 
   // インポートダイアログを開く
   const handleOpenImportDialog = () => {
-    if (!selectedCategory) {
-      setError('先にカテゴリーを選択してください');
-      return;
-    }
     setImportData('');
     setImportDialogOpen(true);
   };
@@ -247,53 +307,54 @@ function DataInput({ categories, salesData, setSalesData }) {
   // データをインポート
   const handleImportData = () => {
     try {
-      if (!selectedCategory || !importData) {
+      if (!importData) {
         setError('インポートするデータがありません');
         return;
       }
 
-      let importedData = {};
+      let newSalesData = { ...salesData };
       
       // JSONかCSVかを判断
       if (importData.trim().startsWith('{')) {
         // JSONデータ
-        importedData = JSON.parse(importData);
+        const importedData = JSON.parse(importData);
+        newSalesData = { ...newSalesData, ...importedData };
       } else {
         // CSVデータ
         const lines = importData.trim().split('\n');
         const headers = lines[0].split(',');
         
         // ヘッダーの検証
-        if (headers.length < 2 || !headers.includes('date') || !headers.includes('quantity')) {
-          setError('CSVフォーマットが正しくありません。date,quantityの列が必要です');
+        if (headers.length < 3 || 
+            !headers.includes('category') || 
+            !headers.includes('date') || 
+            !headers.includes('quantity')) {
+          setError('CSVフォーマットが正しくありません。category,date,quantityの列が必要です');
           return;
         }
         
+        const categoryIndex = headers.indexOf('category');
         const dateIndex = headers.indexOf('date');
         const quantityIndex = headers.indexOf('quantity');
         
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',');
-          if (values.length >= 2) {
+          if (values.length >= 3) {
+            const category = values[categoryIndex].trim();
             const date = values[dateIndex].trim();
             const quantity = parseInt(values[quantityIndex].trim(), 10);
             
-            if (!isNaN(quantity) && date) {
-              importedData[date] = quantity;
+            if (!isNaN(quantity) && category && date) {
+              if (!newSalesData[category]) {
+                newSalesData[category] = {};
+              }
+              newSalesData[category][date] = quantity;
             }
           }
         }
       }
       
-      // 既存データとマージ
-      setSalesData({
-        ...salesData,
-        [selectedCategory]: {
-          ...(salesData[selectedCategory] || {}),
-          ...importedData
-        }
-      });
-      
+      setSalesData(newSalesData);
       setImportDialogOpen(false);
       setSuccess('データをインポートしました');
     } catch (error) {
@@ -308,54 +369,33 @@ function DataInput({ categories, salesData, setSalesData }) {
         販売データ管理
       </Typography>
       <Paper elevation={2} sx={{ p: 2 }}>
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12} sm={3}>
-            <FormControl fullWidth>
-              <InputLabel>カテゴリー</InputLabel>
-              <Select
-                value={selectedCategory}
-                label="カテゴリー"
-                onChange={(e) => setSelectedCategory(e.target.value)}
-              >
-                {categories.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          {selectedCategory && (
-            <Grid item xs={12} sm={9}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileUploadIcon />}
-                  onClick={handleOpenImportDialog}
-                >
-                  インポート
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileDownloadIcon />}
-                  onClick={handleExportCSV}
-                  disabled={!filteredData.length}
-                >
-                  CSV出力
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileDownloadIcon />}
-                  onClick={handleExportJSON}
-                  disabled={!filteredData.length}
-                >
-                  JSON出力
-                </Button>
-              </Box>
-            </Grid>
-          )}
-        </Grid>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              startIcon={<FileUploadIcon />}
+              onClick={handleOpenImportDialog}
+            >
+              インポート
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportCSV}
+              disabled={tableData.length === 0}
+            >
+              CSV出力
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportJSON}
+              disabled={Object.keys(salesData).length === 0}
+            >
+              JSON出力
+            </Button>
+          </Box>
+        </Box>
 
         <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
           <Tab label="データ入力" />
@@ -364,6 +404,23 @@ function DataInput({ categories, salesData, setSalesData }) {
 
         {tabValue === 0 && (
           <Grid container spacing={2}>
+            <Grid item xs={12} sm={3}>
+              <FormControl fullWidth>
+                <InputLabel>カテゴリー</InputLabel>
+                <Select
+                  value={selectedCategory}
+                  label="カテゴリー"
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                >
+                  {categories.map((category) => (
+                    <MenuItem key={category} value={category}>
+                      {category}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
             <Grid item xs={12} sm={3}>
               <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ja}>
                 <DatePicker
@@ -375,7 +432,7 @@ function DataInput({ categories, salesData, setSalesData }) {
               </LocalizationProvider>
             </Grid>
             
-            <Grid item xs={12} sm={3}>
+            <Grid item xs={12} sm={2}>
               <TextField
                 label="数量"
                 type="number"
@@ -385,7 +442,7 @@ function DataInput({ categories, salesData, setSalesData }) {
               />
             </Grid>
             
-            <Grid item xs={12} sm={3}>
+            <Grid item xs={12} sm={2}>
               <Button
                 variant="contained"
                 onClick={handleAddData}
@@ -398,7 +455,7 @@ function DataInput({ categories, salesData, setSalesData }) {
             </Grid>
             
             {editMode && (
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={12} sm={2}>
                 <Button
                   variant="outlined"
                   onClick={handleCancelEdit}
@@ -413,51 +470,113 @@ function DataInput({ categories, salesData, setSalesData }) {
         )}
 
         {tabValue === 1 && (
-          <TableContainer component={Paper} sx={{ mt: 2 }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>日付</TableCell>
-                  <TableCell align="right">数量</TableCell>
-                  <TableCell align="right">操作</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredData.length > 0 ? (
-                  filteredData.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell component="th" scope="row">
-                        {row.date}
-                      </TableCell>
-                      <TableCell align="right">{row.quantity}</TableCell>
-                      <TableCell align="right">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleEdit(row.date, row.quantity)}
-                          color="primary"
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleDelete(row.date)}
-                          color="error"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
+          <>
+            <Box sx={{ display: 'flex', mb: 2, gap: 2 }}>
+              <FormControl sx={{ minWidth: 200 }}>
+                <InputLabel>カテゴリーフィルター</InputLabel>
+                <Select
+                  value={filterCategory}
+                  label="カテゴリーフィルター"
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                >
+                  <MenuItem value="all">すべて表示</MenuItem>
+                  {categories.map((category) => (
+                    <MenuItem key={category} value={category}>
+                      {category}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+            
+            <TableContainer component={Paper} sx={{ mt: 2 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell 
+                      onClick={() => toggleSort('category')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        カテゴリー
+                        <Tooltip title={`${sortField === 'category' ? (sortDirection === 'asc' ? '昇順' : '降順') : '昇順'}`}>
+                          <SortIcon 
+                            fontSize="small" 
+                            color={sortField === 'category' ? 'primary' : 'disabled'}
+                          />
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                    <TableCell 
+                      onClick={() => toggleSort('date')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        日付
+                        <Tooltip title={`${sortField === 'date' ? (sortDirection === 'asc' ? '昇順' : '降順') : '昇順'}`}>
+                          <SortIcon 
+                            fontSize="small" 
+                            color={sortField === 'date' ? 'primary' : 'disabled'}
+                          />
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                    <TableCell 
+                      align="right"
+                      onClick={() => toggleSort('quantity')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        数量
+                        <Tooltip title={`${sortField === 'quantity' ? (sortDirection === 'asc' ? '昇順' : '降順') : '昇順'}`}>
+                          <SortIcon 
+                            fontSize="small" 
+                            color={sortField === 'quantity' ? 'primary' : 'disabled'}
+                          />
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                    <TableCell align="right">操作</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tableData.length > 0 ? (
+                    tableData.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <Chip label={row.category} size="small" />
+                        </TableCell>
+                        <TableCell>{row.date}</TableCell>
+                        <TableCell align="right">{row.quantity}</TableCell>
+                        <TableCell align="right">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleEdit(row.category, row.date, row.quantity)}
+                            color="primary"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDelete(row.category, row.date)}
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">
+                        データがありません
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center">
-                      {selectedCategory ? 'データがありません' : 'カテゴリーを選択してください'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
         )}
       </Paper>
       
@@ -482,7 +601,7 @@ function DataInput({ categories, salesData, setSalesData }) {
           <DialogContentText sx={{ mb: 2 }}>
             CSVまたはJSONフォーマットのデータをインポートします。
             <br />
-            CSVの場合は「date,quantity」の形式が必要です。
+            CSVの場合は「category,date,quantity」の形式が必要です。
           </DialogContentText>
           
           <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
