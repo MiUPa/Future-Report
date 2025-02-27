@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies 📦
         run: npm ci
 
+      - name: Install util polyfill 🔌
+        run: npm install --save util
+
       - name: Build 🔧
         run: npm run build
         env:

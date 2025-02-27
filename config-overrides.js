@@ -9,6 +9,7 @@ module.exports = override(
       "os": require.resolve("os-browserify/browser"),
       "stream": require.resolve("stream-browserify"),
       "buffer": require.resolve("buffer/"),
+      "util": require.resolve("util/"),
       "child_process": false
     }
   }),
