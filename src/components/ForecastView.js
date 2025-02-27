@@ -17,9 +17,12 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  TimeScale
 } from 'chart.js';
+import 'chartjs-adapter-date-fns';
 import { Line } from 'react-chartjs-2';
+import { ja } from 'date-fns/locale';
 
 ChartJS.register(
   CategoryScale,
@@ -28,7 +31,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  TimeScale
 );
 
 function ForecastView({ categories, salesData }) {
@@ -79,18 +83,27 @@ function ForecastView({ categories, salesData }) {
       // 将来の予測値
       const futurePredictions = Array(futureMonths).fill(forecast);
       
+      // 日付を Date オブジェクトに変換
+      const dateObjects = [...sortedDates, ...futureDates].map(dateStr => new Date(dateStr));
+      
       return {
-        labels: [...sortedDates, ...futureDates],
+        labels: dateObjects,
         datasets: [
           {
             label: '実績値',
-            data: actualData,
+            data: actualData.map((value, index) => ({
+              x: dateObjects[index],
+              y: value
+            })).filter(point => point.y !== null),
             borderColor: 'rgb(75, 192, 192)',
             tension: 0.1
           },
           {
             label: '予測値',
-            data: [...predictionData, ...futurePredictions],
+            data: [...predictionData, ...futurePredictions].map((value, index) => ({
+              x: dateObjects[index],
+              y: value
+            })).filter(point => point.y !== null),
             borderColor: 'rgb(255, 99, 132)',
             borderDash: [5, 5],
             tension: 0.1
@@ -150,6 +163,25 @@ function ForecastView({ categories, salesData }) {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
+                  x: {
+                    type: 'time',
+                    time: {
+                      unit: 'month',
+                      displayFormats: {
+                        month: 'yyyy-MM-dd'
+                      },
+                      tooltipFormat: 'yyyy-MM-dd'
+                    },
+                    adapters: {
+                      date: {
+                        locale: ja
+                      }
+                    },
+                    ticks: {
+                      autoSkip: false,
+                      maxRotation: 45
+                    }
+                  },
                   y: {
                     beginAtZero: true
                   }
