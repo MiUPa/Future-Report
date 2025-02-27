@@ -118,6 +118,7 @@ function App() {
                 categories={categories} 
                 salesData={salesData} 
                 setSalesData={setSalesData} 
+                setCategories={setCategories}
               />
             )}
           </Box>

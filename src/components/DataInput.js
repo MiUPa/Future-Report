@@ -28,7 +28,10 @@ import {
   DialogContentText,
   DialogTitle,
   Chip,
-  Tooltip
+  Tooltip,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -39,8 +42,9 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SortIcon from '@mui/icons-material/Sort';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import AddIcon from '@mui/icons-material/Add';
 
-function DataInput({ categories, salesData, setSalesData }) {
+function DataInput({ categories, salesData, setSalesData, setCategories }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [quantity, setQuantity] = useState('');
@@ -57,6 +61,13 @@ function DataInput({ categories, salesData, setSalesData }) {
   const [filterCategory, setFilterCategory] = useState('all');
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('asc');
+  const [previewData, setPreviewData] = useState([]);
+  const [previewHeaders, setPreviewHeaders] = useState([]);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [fileToProcess, setFileToProcess] = useState(null);
+  const [fileType, setFileType] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
 
   // すべてのカテゴリーのデータを統合して表形式に変換
   useEffect(() => {
@@ -114,8 +125,8 @@ function DataInput({ categories, salesData, setSalesData }) {
 
   const handleAddData = () => {
     try {
-      if (selectedCategory && selectedDate && quantity) {
-        const dateKey = selectedDate.toISOString().split('T')[0];
+    if (selectedCategory && selectedDate && quantity) {
+      const dateKey = selectedDate.toISOString().split('T')[0];
         const parsedQuantity = parseInt(quantity, 10);
         
         if (isNaN(parsedQuantity)) {
@@ -153,10 +164,10 @@ function DataInput({ categories, salesData, setSalesData }) {
           setSuccess('データを更新しました');
         } else {
           // 新規追加
-          setSalesData({
-            ...salesData,
-            [selectedCategory]: {
-              ...(salesData[selectedCategory] || {}),
+      setSalesData({
+        ...salesData,
+        [selectedCategory]: {
+          ...(salesData[selectedCategory] || {}),
               [dateKey]: parsedQuantity
             }
           });
@@ -281,6 +292,11 @@ function DataInput({ categories, salesData, setSalesData }) {
   // インポートダイアログを開く
   const handleOpenImportDialog = () => {
     setImportData('');
+    setPreviewData([]);
+    setPreviewHeaders([]);
+    setPreviewMode(false);
+    setFileToProcess(null);
+    setFileType('');
     setImportDialogOpen(true);
   };
 
@@ -302,384 +318,390 @@ function DataInput({ categories, salesData, setSalesData }) {
       return;
     }
 
-    // 小さいファイルの場合は通常の方法で読み込む
-    if (file.size < 1 * 1024 * 1024) { // 1MB未満
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImportData(e.target.result);
-      };
-      reader.readAsText(file);
-    } else {
-      // 大きなファイルの場合は直接処理
-      setImportDialogOpen(false);
-      setSuccess('大きなファイルを処理しています。しばらくお待ちください...');
-      
-      // 非同期でファイル処理を開始
-      setTimeout(() => {
-        processLargeFile(file);
-      }, 100);
-    }
+    // ファイルタイプを設定
+    const isJSON = file.name.toLowerCase().endsWith('.json');
+    setFileType(isJSON ? 'json' : 'csv');
+    
+    // ファイルを読み込む
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        if (!e.target || !e.target.result) {
+          throw new Error('ファイルの読み込みに失敗しました');
+        }
+        
+        const fileContent = e.target.result.toString();
+        setImportData(fileContent);
+        
+        // JSONファイルの場合
+        if (isJSON) {
+          // JSONデータを解析
+          const jsonData = JSON.parse(fileContent);
+          
+          // プレビューデータの作成
+          const previewRows = [];
+          let count = 0;
+          
+          // JSONデータから最初の数件を抽出
+          for (const category in jsonData) {
+            for (const date in jsonData[category]) {
+              if (count < 10) { // 最初の10件のみ表示
+                previewRows.push({
+                  category,
+                  date,
+                  quantity: jsonData[category][date]
+                });
+                count++;
+              } else {
+                break;
+              }
+            }
+            if (count >= 10) break;
+          }
+          
+          setPreviewHeaders(['category', 'date', 'quantity']);
+          setPreviewData(previewRows);
+        } 
+        // CSVファイルの場合
+        else {
+          // CSVデータを行に分割
+          const lines = fileContent.split('\n');
+          if (lines.length > 0) {
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            setPreviewHeaders(headers);
+            
+            // ヘッダーの検証と列インデックスの特定
+            const categoryIndex = headers.indexOf('category');
+            const dateIndex = headers.indexOf('date');
+            const quantityIndex = headers.findIndex(h => h === 'quantity' || h === 'sales');
+            
+            if (categoryIndex !== -1 && dateIndex !== -1 && quantityIndex !== -1) {
+              const previewRows = [];
+              
+              // 最初の10行（ヘッダー行を除く）をプレビュー
+              for (let i = 1; i < Math.min(lines.length, 11); i++) {
+                if (!lines[i].trim()) continue;
+                
+                const values = lines[i].split(',');
+                if (values.length >= Math.max(categoryIndex, dateIndex, quantityIndex) + 1) {
+                  previewRows.push({
+                    category: values[categoryIndex].trim(),
+                    date: values[dateIndex].trim(),
+                    quantity: values[quantityIndex].trim()
+                  });
+                }
+              }
+              
+              setPreviewData(previewRows);
+            } else {
+              throw new Error('CSVフォーマットが正しくありません。category, date, quantity/sales の列が必要です');
+            }
+          }
+        }
+        
+        // プレビューモードに切り替え
+        setPreviewMode(true);
+      } catch (error) {
+        console.error('ファイル読み込みエラー:', error);
+        setError(`ファイルの読み込み中にエラーが発生しました: ${error.message}`);
+        setPreviewData([]);
+        setPreviewHeaders([]);
+        setPreviewMode(false);
+      }
+    };
+    
+    reader.onerror = () => {
+      setError('ファイルの読み込みに失敗しました');
+    };
+    
+    reader.readAsText(file);
     
     // ファイル入力をリセット
     event.target.value = null;
   };
 
-  // 大きなファイルを直接処理する関数
-  const processLargeFile = (file) => {
+  // テキストエリアの内容が変更されたときのプレビュー生成
+  const handleImportDataChange = (e) => {
+    const data = e.target.value;
+    setImportData(data);
+    
+    if (!data.trim()) {
+      setPreviewData([]);
+      setPreviewHeaders([]);
+      setPreviewMode(false);
+      return;
+    }
+    
     try {
-      // CSVファイルかJSONファイルかを判断
-      if (file.name.toLowerCase().endsWith('.json')) {
-        // JSONファイルの場合
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const jsonData = JSON.parse(e.target.result);
-            const newSalesData = { ...salesData, ...jsonData };
-            setSalesData(newSalesData);
-            setSuccess('JSONデータをインポートしました');
-          } catch (error) {
-            setError(`JSONデータの解析に失敗しました: ${error.message}`);
+      // JSONかCSVかを判断
+      if (data.trim().startsWith('{')) {
+        // JSONデータ
+        setFileType('json');
+        const jsonData = JSON.parse(data);
+        
+        // JSONプレビューデータの作成
+        const previewRows = [];
+        let count = 0;
+        
+        // JSONデータから最初の数件を抽出
+        for (const category in jsonData) {
+          for (const date in jsonData[category]) {
+            if (count < 10) { // 最初の10件のみ表示
+              previewRows.push({
+                category,
+                date,
+                quantity: jsonData[category][date]
+              });
+              count++;
+            } else {
+              break;
+            }
           }
-        };
-        reader.onerror = () => {
-          setError('ファイルの読み込みに失敗しました');
-        };
-        reader.readAsText(file);
+          if (count >= 10) break;
+        }
+        
+        setPreviewHeaders(['category', 'date', 'quantity']);
+        setPreviewData(previewRows);
       } else {
-        // CSVファイルの場合はストリーミング処理
-        processCSVFileInChunks(file);
+        // CSVデータ
+        setFileType('csv');
+        const lines = data.trim().split('\n');
+        if (lines.length > 0) {
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+          setPreviewHeaders(headers);
+          
+          // ヘッダーの検証と列インデックスの特定
+          const categoryIndex = headers.findIndex(h => h === 'category');
+          const dateIndex = headers.findIndex(h => h === 'date');
+          const quantityIndex = headers.findIndex(h => h === 'quantity' || h === 'sales');
+          
+          if (categoryIndex !== -1 && dateIndex !== -1 && quantityIndex !== -1) {
+            const previewRows = [];
+            
+            // 最初の10行（ヘッダー行を除く）をプレビュー
+            for (let i = 1; i < Math.min(lines.length, 11); i++) {
+              if (!lines[i].trim()) continue;
+              
+              const values = lines[i].split(',');
+              if (values.length >= Math.max(categoryIndex, dateIndex, quantityIndex) + 1) {
+                previewRows.push({
+                  category: values[categoryIndex].trim(),
+                  date: values[dateIndex].trim(),
+                  quantity: values[quantityIndex].trim()
+                });
+              }
+            }
+            
+            setPreviewData(previewRows);
+          }
+        }
       }
+      
+      // プレビューモードに切り替え
+      setPreviewMode(true);
     } catch (error) {
-      console.error('ファイル処理エラー:', error);
-      setError(`ファイルの処理中にエラーが発生しました: ${error.message}`);
+      // エラーが発生した場合はプレビューをクリア
+      setPreviewData([]);
+      setPreviewHeaders([]);
+      setPreviewMode(false);
     }
   };
 
-  // CSVファイルをチャンクで処理する関数
-  const processCSVFileInChunks = (file) => {
-    const CHUNK_SIZE = 1024 * 1024; // 1MBずつ読み込む
-    let offset = 0;
-    let lineBuffer = '';
-    let isFirstChunk = true;
-    let headers = [];
-    let categoryIndex = -1;
-    let dateIndex = -1;
-    let quantityIndex = -1;
-    let newSalesData = { ...salesData };
-    let successCount = 0;
-    let errorCount = 0;
-    let totalBytesRead = 0;
+  // データをインポート（プレビュー確認後）
+  const handleImportData = () => {
+    // バリデーション
+    if (!previewMode || previewData.length === 0) {
+      setError('インポートするデータがありません');
+      return;
+    }
 
-    // ファイルの一部を読み込む関数
-    const readNextChunk = () => {
-      const reader = new FileReader();
+    try {
+      // 処理開始前にダイアログを閉じる
+      setImportDialogOpen(false);
       
-      reader.onload = (e) => {
-        if (e.target.result) {
-          try {
-            // 読み込んだチャンクを処理
-            totalBytesRead += e.target.result.length;
-            const progress = Math.min(100, Math.round((totalBytesRead / file.size) * 100));
-            setSuccess(`ファイル読み込み中... ${progress}%`);
-            
-            // 前回の残りと今回のチャンクを結合
-            const chunk = lineBuffer + e.target.result;
-            
-            // 完全な行に分割（最後の不完全な行は次のチャンクのために保存）
-            const lines = chunk.split('\n');
-            lineBuffer = lines.pop() || '';
-            
-            // 最初のチャンクの場合、ヘッダーを処理
-            if (isFirstChunk) {
-              isFirstChunk = false;
-              headers = lines[0].split(',');
-              
-              // ヘッダーの検証と列インデックスの特定
-              headers.forEach((header, index) => {
-                const headerLower = header.toLowerCase().trim();
-                if (headerLower === 'category') {
-                  categoryIndex = index;
-                } else if (headerLower === 'date') {
-                  dateIndex = index;
-                } else if (headerLower === 'quantity' || headerLower === 'sales') {
-                  quantityIndex = index;
-                }
-              });
-              
-              if (categoryIndex === -1 || dateIndex === -1 || quantityIndex === -1) {
-                throw new Error('CSVフォーマットが正しくありません。category, date, quantity/sales の列が必要です');
+      // 新しい販売データオブジェクトを作成
+      const newSalesData = { ...salesData };
+      
+      // JSONデータの場合
+      if (fileType === 'json') {
+        try {
+          // JSONデータを解析
+          const jsonData = JSON.parse(importData);
+          
+          // 各カテゴリーのデータを処理
+          Object.entries(jsonData).forEach(([category, dates]) => {
+            if (typeof dates === 'object' && dates !== null) {
+              if (!newSalesData[category]) {
+                newSalesData[category] = {};
               }
               
-              // ヘッダー行をスキップ
-              lines.shift();
+              // 各日付のデータを追加
+              Object.entries(dates).forEach(([date, qty]) => {
+                const quantity = parseInt(qty, 10);
+                if (!isNaN(quantity)) {
+                  newSalesData[category][date] = quantity;
+                }
+              });
             }
+          });
+          
+          // データを更新して成功メッセージを表示
+          setSalesData(newSalesData);
+          setSuccess('JSONデータをインポートしました');
+        } catch (error) {
+          console.error('JSONインポートエラー:', error);
+          setError(`JSONデータの処理中にエラーが発生しました: ${error.message}`);
+        }
+      } 
+      // CSVデータの場合
+      else {
+        try {
+          // CSVデータを行に分割
+          const lines = importData.trim().split('\n');
+          if (lines.length <= 1) {
+            setError('インポートするデータがありません');
+            return;
+          }
+          
+          // ヘッダー行を解析
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+          
+          // 必要な列のインデックスを特定
+          const categoryIndex = headers.indexOf('category');
+          const dateIndex = headers.indexOf('date');
+          const quantityIndex = headers.findIndex(h => h === 'quantity' || h === 'sales');
+          
+          // 必要な列が存在するか確認
+          if (categoryIndex === -1 || dateIndex === -1 || quantityIndex === -1) {
+            setError('CSVフォーマットが正しくありません。category, date, quantity/sales の列が必要です');
+            return;
+          }
+          
+          // 各行を処理
+          let successCount = 0;
+          let errorCount = 0;
+          
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue; // 空行をスキップ
             
-            // 各行を処理
-            for (const line of lines) {
-              if (!line.trim()) continue; // 空行をスキップ
+            try {
+              const values = line.split(',');
               
-              try {
-                const values = line.split(',');
-                if (values.length >= Math.max(categoryIndex, dateIndex, quantityIndex) + 1) {
-                  const category = values[categoryIndex].trim();
-                  let dateStr = values[dateIndex].trim();
-                  const quantity = parseInt(values[quantityIndex].trim(), 10);
-                  
-                  // 日付フォーマットの変換
-                  let formattedDate;
-                  if (dateStr.includes('/')) {
-                    // YYYY/MM/DD または MM/DD/YYYY 形式を処理
-                    const dateParts = dateStr.split('/');
-                    if (dateParts.length === 3) {
-                      if (dateParts[0].length === 4) {
-                        // YYYY/MM/DD 形式
-                        const year = parseInt(dateParts[0], 10);
-                        const month = parseInt(dateParts[1], 10).toString().padStart(2, '0');
-                        const day = parseInt(dateParts[2], 10).toString().padStart(2, '0');
-                        formattedDate = `${year}-${month}-${day}`;
-                      } else {
-                        // MM/DD/YYYY または DD/MM/YYYY 形式と仮定
-                        // ここでは MM/DD/YYYY と仮定
-                        const year = parseInt(dateParts[2], 10);
-                        const month = parseInt(dateParts[0], 10).toString().padStart(2, '0');
-                        const day = parseInt(dateParts[1], 10).toString().padStart(2, '0');
-                        formattedDate = `${year}-${month}-${day}`;
-                      }
+              // 必要な値が存在するか確認
+              if (values.length > Math.max(categoryIndex, dateIndex, quantityIndex)) {
+                const category = values[categoryIndex].trim();
+                const dateStr = values[dateIndex].trim();
+                const quantityStr = values[quantityIndex].trim();
+                
+                // 数量を整数に変換
+                const quantity = parseInt(quantityStr, 10);
+                
+                // 日付を標準形式に変換
+                let formattedDate = dateStr;
+                
+                // スラッシュ区切りの日付を処理
+                if (dateStr.includes('/')) {
+                  const dateParts = dateStr.split('/');
+                  if (dateParts.length === 3) {
+                    if (dateParts[0].length === 4) {
+                      // YYYY/MM/DD 形式
+                      formattedDate = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
                     } else {
-                      throw new Error(`不正な日付フォーマット: ${dateStr}`);
+                      // MM/DD/YYYY 形式と仮定
+                      formattedDate = `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
                     }
-                  } else {
-                    // すでに YYYY-MM-DD 形式と仮定
-                    formattedDate = dateStr;
                   }
-                  
-                  if (!isNaN(quantity) && category && formattedDate) {
-                    if (!newSalesData[category]) {
-                      newSalesData[category] = {};
-                    }
-                    newSalesData[category][formattedDate] = quantity;
-                    successCount++;
-                    
-                    // 1000件ごとに進捗を更新
-                    if (successCount % 1000 === 0) {
-                      setSuccess(`処理中... ${successCount}件のデータを処理しました`);
-                    }
-                  } else {
-                    errorCount++;
+                }
+                
+                // データを追加
+                if (!isNaN(quantity) && category && formattedDate) {
+                  if (!newSalesData[category]) {
+                    newSalesData[category] = {};
                   }
+                  newSalesData[category][formattedDate] = quantity;
+                  successCount++;
                 } else {
                   errorCount++;
                 }
-              } catch (err) {
-                console.error(`行の処理中にエラー:`, err);
+              } else {
                 errorCount++;
               }
+            } catch (err) {
+              console.error(`行 ${i} の処理中にエラー:`, err);
+              errorCount++;
             }
-            
-            // まだ読み込むデータがあれば次のチャンクを読み込む
-            if (offset < file.size) {
-              readNextChunk();
-            } else {
-              // 全てのチャンクを処理完了
-              finishImport(newSalesData, successCount, errorCount);
-            }
-          } catch (error) {
-            console.error('チャンク処理エラー:', error);
-            setError(`データの処理中にエラーが発生しました: ${error.message}`);
           }
+          
+          // データを更新して成功メッセージを表示
+          setSalesData(newSalesData);
+          
+          if (successCount > 0) {
+            setSuccess(`${successCount}件のデータをインポートしました${errorCount > 0 ? `（${errorCount}件の無効なデータはスキップされました）` : ''}`);
+          } else {
+            setError('有効なデータがインポートされませんでした');
+          }
+        } catch (error) {
+          console.error('CSVインポートエラー:', error);
+          setError(`CSVデータの処理中にエラーが発生しました: ${error.message}`);
         }
-      };
-      
-      reader.onerror = () => {
-        setError('ファイルの読み込みに失敗しました');
-      };
-      
-      // ファイルの一部を切り出して読み込む
-      const slice = file.slice(offset, offset + CHUNK_SIZE);
-      reader.readAsText(slice);
-      offset += CHUNK_SIZE;
-    };
-    
-    // 最初のチャンクを読み込み開始
-    readNextChunk();
-  };
-
-  // データをインポート（テキストエリアからの入力用）
-  const handleImportData = () => {
-    try {
-      if (!importData) {
-        setError('インポートするデータがありません');
-        return;
       }
-
-      // 処理開始前にダイアログを閉じる（UIをブロックしないため）
-      setImportDialogOpen(false);
-      setSuccess('インポート処理を開始しました。大きなデータの場合は時間がかかることがあります...');
-
-      // 非同期処理でインポートを実行
-      setTimeout(() => {
-        processImportData();
-      }, 100);
+      
+      // インポート後に状態をリセット
+      setImportData('');
+      setPreviewData([]);
+      setPreviewHeaders([]);
+      setPreviewMode(false);
+      setFileToProcess(null);
+      setFileType('');
+      
     } catch (error) {
       console.error('インポートエラー:', error);
       setError(`データのインポート中にエラーが発生しました: ${error.message}`);
     }
   };
 
-  // インポートデータを実際に処理する関数
-  const processImportData = () => {
-    try {
-      let newSalesData = { ...salesData };
-      
-      // JSONかCSVかを判断
-      if (importData.trim().startsWith('{')) {
-        // JSONデータ
-        const importedData = JSON.parse(importData);
-        newSalesData = { ...newSalesData, ...importedData };
-        setSalesData(newSalesData);
-        setSuccess('JSONデータをインポートしました');
-      } else {
-        // CSVデータ
-        processCSVData(newSalesData);
-      }
-    } catch (error) {
-      console.error('インポート処理エラー:', error);
-      setError(`データの処理中にエラーが発生しました: ${error.message}`);
-    }
+  // カテゴリー管理ダイアログを開く
+  const handleOpenCategoryDialog = () => {
+    setNewCategory('');
+    setCategoryDialogOpen(true);
   };
 
-  // CSVデータを処理する関数
-  const processCSVData = (newSalesData) => {
-    try {
-      const lines = importData.trim().split('\n');
-      if (lines.length === 0) {
-        setError('CSVデータが空です');
-        return;
-      }
-
-      const headers = lines[0].split(',');
-      
-      // ヘッダーの検証と列インデックスの特定
-      let categoryIndex = -1;
-      let dateIndex = -1;
-      let quantityIndex = -1;
-      
-      headers.forEach((header, index) => {
-        const headerLower = header.toLowerCase().trim();
-        if (headerLower === 'category') {
-          categoryIndex = index;
-        } else if (headerLower === 'date') {
-          dateIndex = index;
-        } else if (headerLower === 'quantity' || headerLower === 'sales') {
-          quantityIndex = index;
-        }
-      });
-      
-      if (categoryIndex === -1 || dateIndex === -1 || quantityIndex === -1) {
-        setError('CSVフォーマットが正しくありません。category, date, quantity/sales の列が必要です');
-        return;
-      }
-      
-      // 大きなファイルを処理するためのチャンク処理
-      const chunkSize = 1000; // 一度に処理する行数
-      let currentChunk = 0;
-      let successCount = 0;
-      let errorCount = 0;
-      
-      // チャンク処理関数
-      const processChunk = () => {
-        const startIdx = currentChunk * chunkSize + 1; // ヘッダー行をスキップ
-        const endIdx = Math.min(startIdx + chunkSize, lines.length);
-        
-        for (let i = startIdx; i < endIdx; i++) {
-          if (!lines[i].trim()) continue; // 空行をスキップ
-          
-          try {
-            const values = lines[i].split(',');
-            if (values.length >= Math.max(categoryIndex, dateIndex, quantityIndex) + 1) {
-              const category = values[categoryIndex].trim();
-              let dateStr = values[dateIndex].trim();
-              const quantity = parseInt(values[quantityIndex].trim(), 10);
-              
-              // 日付フォーマットの変換
-              let formattedDate;
-              if (dateStr.includes('/')) {
-                // YYYY/MM/DD または MM/DD/YYYY 形式を処理
-                const dateParts = dateStr.split('/');
-                if (dateParts.length === 3) {
-                  if (dateParts[0].length === 4) {
-                    // YYYY/MM/DD 形式
-                    const year = parseInt(dateParts[0], 10);
-                    const month = parseInt(dateParts[1], 10).toString().padStart(2, '0');
-                    const day = parseInt(dateParts[2], 10).toString().padStart(2, '0');
-                    formattedDate = `${year}-${month}-${day}`;
-                  } else {
-                    // MM/DD/YYYY または DD/MM/YYYY 形式と仮定
-                    // ここでは MM/DD/YYYY と仮定
-                    const year = parseInt(dateParts[2], 10);
-                    const month = parseInt(dateParts[0], 10).toString().padStart(2, '0');
-                    const day = parseInt(dateParts[1], 10).toString().padStart(2, '0');
-                    formattedDate = `${year}-${month}-${day}`;
-                  }
-                } else {
-                  throw new Error(`不正な日付フォーマット: ${dateStr}`);
-                }
-              } else {
-                // すでに YYYY-MM-DD 形式と仮定
-                formattedDate = dateStr;
-              }
-              
-              if (!isNaN(quantity) && category && formattedDate) {
-                if (!newSalesData[category]) {
-                  newSalesData[category] = {};
-                }
-                newSalesData[category][formattedDate] = quantity;
-                successCount++;
-              } else {
-                errorCount++;
-              }
-            } else {
-              errorCount++;
-            }
-          } catch (err) {
-            console.error(`行 ${i} の処理中にエラー:`, err);
-            errorCount++;
-          }
-        }
-        
-        // 進捗状況の更新
-        const progress = Math.min(100, Math.round((endIdx / lines.length) * 100));
-        setSuccess(`インポート中... ${progress}% 完了 (${successCount}件処理済み)`);
-        
-        // 次のチャンクがあれば処理、なければ完了
-        currentChunk++;
-        if (endIdx < lines.length) {
-          // 次のチャンクを非同期で処理（UIをブロックしないため）
-          setTimeout(processChunk, 0);
-        } else {
-          // 全チャンクの処理完了
-          finishImport(newSalesData, successCount, errorCount);
-        }
-      };
-      
-      // 最初のチャンクを処理開始
-      processChunk();
-    } catch (error) {
-      console.error('CSV処理エラー:', error);
-      setError(`CSVデータの処理中にエラーが発生しました: ${error.message}`);
-    }
-  };
-
-  // インポート完了時の処理
-  const finishImport = (newSalesData, successCount, errorCount) => {
-    if (successCount > 0) {
-      setSalesData(newSalesData);
-      setSuccess(`${successCount}件のデータをインポートしました${errorCount > 0 ? `（${errorCount}件の無効なデータはスキップされました）` : ''}`);
-    } else if (errorCount > 0) {
-      setError(`インポートに失敗しました。${errorCount}件の無効なデータがありました`);
+  // 新しいカテゴリーを追加
+  const handleAddCategory = () => {
+    if (newCategory.trim() && !categories.includes(newCategory.trim())) {
+      setCategories([...categories, newCategory.trim()]);
+      setNewCategory('');
+      setSuccess('カテゴリーを追加しました');
+    } else if (categories.includes(newCategory.trim())) {
+      setError('同名のカテゴリーが既に存在します');
     } else {
-      setError('インポートするデータがありませんでした');
+      setError('カテゴリー名を入力してください');
     }
+  };
+
+  // カテゴリーを削除
+  const handleDeleteCategory = (categoryToDelete) => {
+    // カテゴリーに関連するデータがあるか確認
+    const hasData = salesData[categoryToDelete] && Object.keys(salesData[categoryToDelete]).length > 0;
+    
+    if (hasData) {
+      // 確認ダイアログを表示する代わりに警告メッセージを表示
+      setError(`カテゴリー「${categoryToDelete}」には販売データが存在します。データを削除してからカテゴリーを削除してください。`);
+      return;
+    }
+    
+    // カテゴリーを削除
+    setCategories(categories.filter(category => category !== categoryToDelete));
+    
+    // 関連するデータも削除（念のため）
+    if (salesData[categoryToDelete]) {
+      const newSalesData = { ...salesData };
+      delete newSalesData[categoryToDelete];
+      setSalesData(newSalesData);
+    }
+    
+    setSuccess(`カテゴリー「${categoryToDelete}」を削除しました`);
   };
 
   return (
@@ -714,6 +736,14 @@ function DataInput({ categories, salesData, setSalesData }) {
               JSON出力
             </Button>
           </Box>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={handleOpenCategoryDialog}
+            color="primary"
+          >
+            カテゴリー管理
+          </Button>
         </Box>
 
         <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
@@ -914,7 +944,12 @@ function DataInput({ categories, salesData, setSalesData }) {
       </Snackbar>
       
       {/* インポートダイアログ */}
-      <Dialog open={importDialogOpen} onClose={() => setImportDialogOpen(false)}>
+      <Dialog 
+        open={importDialogOpen} 
+        onClose={() => setImportDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>データインポート</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
@@ -943,22 +978,130 @@ function DataInput({ categories, salesData, setSalesData }) {
           <TextField
             label="データ"
             multiline
-            rows={10}
+            rows={6}
             value={importData}
-            onChange={(e) => setImportData(e.target.value)}
+            onChange={handleImportDataChange}
             fullWidth
             placeholder="ここにCSVまたはJSONデータを貼り付けるか、ファイルを選択してください"
           />
+          
+          {/* プレビュー表示 */}
+          {previewMode && previewData.length > 0 && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                データプレビュー（最初の{previewData.length}行）
+              </Typography>
+              <TableContainer component={Paper} sx={{ maxHeight: 300 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      {fileType === 'json' || (
+                        previewHeaders.includes('category') && 
+                        previewHeaders.includes('date') && 
+                        (previewHeaders.includes('quantity') || previewHeaders.includes('sales'))
+                      ) ? (
+                        <>
+                          <TableCell>カテゴリー</TableCell>
+                          <TableCell>日付</TableCell>
+                          <TableCell>数量</TableCell>
+                        </>
+                      ) : (
+                        previewHeaders.map((header, index) => (
+                          <TableCell key={index}>{header}</TableCell>
+                        ))
+                      )}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {previewData.map((row, rowIndex) => (
+                      <TableRow key={rowIndex}>
+                        {fileType === 'json' || (
+                          previewHeaders.includes('category') && 
+                          previewHeaders.includes('date') && 
+                          (previewHeaders.includes('quantity') || previewHeaders.includes('sales'))
+                        ) ? (
+                          <>
+                            <TableCell>{row.category}</TableCell>
+                            <TableCell>{row.date}</TableCell>
+                            <TableCell>{row.quantity}</TableCell>
+                          </>
+                        ) : (
+                          previewHeaders.map((header, colIndex) => (
+                            <TableCell key={`${rowIndex}-${colIndex}`}>
+                              {row[header]}
+                            </TableCell>
+                          ))
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                {fileType === 'csv' ? 'CSVデータ' : 'JSONデータ'}のプレビューです。実際のインポート時には日付形式の変換などが行われます。
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setImportDialogOpen(false)}>キャンセル</Button>
           <Button 
             onClick={handleImportData} 
             variant="contained"
-            disabled={!importData.trim()}
+            disabled={!previewMode || previewData.length === 0}
           >
             インポート
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* カテゴリー管理ダイアログ */}
+      <Dialog open={categoryDialogOpen} onClose={() => setCategoryDialogOpen(false)}>
+        <DialogTitle>カテゴリー管理</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', gap: 1, mb: 2, mt: 1 }}>
+            <TextField
+              label="新しいカテゴリー"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              fullWidth
+            />
+            <Button
+              variant="contained"
+              onClick={handleAddCategory}
+              disabled={!newCategory.trim()}
+            >
+              追加
+            </Button>
+          </Box>
+          
+          <Typography variant="subtitle2" gutterBottom>
+            既存のカテゴリー
+          </Typography>
+          
+          <List>
+            {categories.map((category) => (
+              <ListItem key={category} disablePadding>
+                <ListItemText primary={category} />
+                <IconButton
+                  edge="end"
+                  aria-label="delete"
+                  onClick={() => handleDeleteCategory(category)}
+                  color="error"
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </ListItem>
+            ))}
+            {categories.length === 0 && (
+              <ListItem>
+                <ListItemText primary="カテゴリーがありません" />
+              </ListItem>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCategoryDialogOpen(false)}>閉じる</Button>
         </DialogActions>
       </Dialog>
     </Box>

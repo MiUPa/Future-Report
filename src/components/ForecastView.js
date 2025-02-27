@@ -39,6 +39,34 @@ function ForecastView({ categories, salesData }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [chartData, setChartData] = useState(null);
 
+  // 初期表示時に代表的なカテゴリを選択
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      // データ量が最も多いカテゴリを見つける
+      let bestCategory = '';
+      let maxDataPoints = 0;
+
+      categories.forEach(category => {
+        if (salesData[category]) {
+          const dataPoints = Object.keys(salesData[category]).length;
+          if (dataPoints > maxDataPoints) {
+            maxDataPoints = dataPoints;
+            bestCategory = category;
+          }
+        }
+      });
+
+      // データがあるカテゴリが見つからなければ、最初のカテゴリを選択
+      if (!bestCategory && categories.length > 0) {
+        bestCategory = categories[0];
+      }
+
+      if (bestCategory) {
+        setSelectedCategory(bestCategory);
+      }
+    }
+  }, [categories, salesData, selectedCategory]);
+
   const calculateForecast = (data) => {
     if (!data || Object.keys(data).length === 0) return null;
 
