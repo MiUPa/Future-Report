@@ -7,7 +7,9 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Grid
+  Grid,
+  ToggleButtonGroup,
+  ToggleButton
 } from '@mui/material';
 import {
   Chart as ChartJS,
@@ -38,6 +40,7 @@ ChartJS.register(
 function ForecastView({ categories, salesData }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [chartData, setChartData] = useState(null);
+  const [forecastPeriod, setForecastPeriod] = useState(3); // デフォルトは3ヶ月
 
   // 初期表示時に代表的なカテゴリを選択
   useEffect(() => {
@@ -67,6 +70,12 @@ function ForecastView({ categories, salesData }) {
     }
   }, [categories, salesData, selectedCategory]);
 
+  const handleForecastPeriodChange = (event, newPeriod) => {
+    if (newPeriod !== null) {
+      setForecastPeriod(newPeriod);
+    }
+  };
+
   const calculateForecast = (data) => {
     if (!data || Object.keys(data).length === 0) return null;
 
@@ -87,8 +96,8 @@ function ForecastView({ categories, salesData }) {
         forecast = alpha * values[i] + (1 - alpha) * forecast;
       }
       
-      // 将来3ヶ月分の予測
-      const futureMonths = 3;
+      // 選択された予測期間に基づいて将来の月数を設定
+      const futureMonths = forecastPeriod;
       
       // 将来の日付を生成
       const lastDate = new Date(sortedDates[sortedDates.length - 1]);
@@ -156,7 +165,7 @@ function ForecastView({ categories, salesData }) {
       console.error('チャートデータ設定エラー:', error);
       setChartData(null);
     }
-  }, [selectedCategory, salesData]);
+  }, [selectedCategory, salesData, forecastPeriod]); // forecastPeriodを依存配列に追加
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -164,7 +173,7 @@ function ForecastView({ categories, salesData }) {
         需要予測
       </Typography>
       <Paper elevation={2} sx={{ p: 2 }}>
-        <Grid container spacing={2}>
+        <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={3}>
             <FormControl fullWidth>
               <InputLabel>カテゴリー</InputLabel>
@@ -180,6 +189,30 @@ function ForecastView({ categories, salesData }) {
                 ))}
               </Select>
             </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography variant="body2" sx={{ mr: 2 }}>
+                予測期間:
+              </Typography>
+              <ToggleButtonGroup
+                value={forecastPeriod}
+                exclusive
+                onChange={handleForecastPeriodChange}
+                aria-label="forecast period"
+                size="small"
+              >
+                <ToggleButton value={3} aria-label="3 months">
+                  3ヶ月
+                </ToggleButton>
+                <ToggleButton value={6} aria-label="6 months">
+                  6ヶ月
+                </ToggleButton>
+                <ToggleButton value={12} aria-label="1 year">
+                  1年
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
           </Grid>
         </Grid>
 
@@ -217,7 +250,7 @@ function ForecastView({ categories, salesData }) {
                 plugins: {
                   title: {
                     display: true,
-                    text: `${selectedCategory}の需要予測`
+                    text: `${selectedCategory}の需要予測（${forecastPeriod === 12 ? '1年' : forecastPeriod + 'ヶ月'}）`
                   }
                 }
               }}
