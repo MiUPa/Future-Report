@@ -33,9 +33,13 @@ jobs:
         env:
           CI: false  # CIモードでのビルドエラーを警告として扱う
 
+      - name: Create .nojekyll file 📄
+        run: touch build/.nojekyll
+
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: build  # ビルド出力ディレクトリ
           branch: gh-pages  # デプロイ先のブランチ
-          clean: true  # デプロイ前にgh-pagesブランチをクリーンアップ 
+          clean: true  # デプロイ前にgh-pagesブランチをクリーンアップ
+          clean-exclude: .nojekyll  # .nojekyllファイルを除外しない 
