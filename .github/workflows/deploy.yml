@@ -34,4 +34,5 @@ jobs:
         with:
           folder: build  # ビルド出力ディレクトリ
           branch: gh-pages  # デプロイ先のブランチ
-          clean: true  # デプロイ前にgh-pagesブランチをクリーンアップ 
+          clean: true  # デプロイ前にgh-pagesブランチをクリーンアップ
+          token: ${{ secrets.DEPLOY_TOKEN }}  # 個人アクセストークンを使用 
