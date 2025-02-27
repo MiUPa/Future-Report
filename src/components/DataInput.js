@@ -781,53 +781,53 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
         </Tabs>
 
         {tabValue === 0 && (
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={3}>
-              <FormControl fullWidth>
-                <InputLabel>カテゴリー</InputLabel>
-                <Select
-                  value={selectedCategory}
-                  label="カテゴリー"
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                >
-                  {categories.map((category) => (
-                    <MenuItem key={category} value={category}>
-                      {category}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={3}>
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ja}>
-                <DatePicker
-                  label="日付"
-                  value={selectedDate}
-                  onChange={setSelectedDate}
-                  slotProps={{ textField: { fullWidth: true } }}
-                />
-              </LocalizationProvider>
-            </Grid>
-            
-            <Grid item xs={12} sm={2}>
-              <TextField
-                label="数量"
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                fullWidth
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={2}>
-              <Button
-                variant="contained"
-                onClick={handleAddData}
-                disabled={!selectedCategory || !selectedDate || !quantity}
-                fullWidth
-                sx={{ height: '100%' }}
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={3}>
+            <FormControl fullWidth>
+              <InputLabel>カテゴリー</InputLabel>
+              <Select
+                value={selectedCategory}
+                label="カテゴリー"
+                onChange={(e) => setSelectedCategory(e.target.value)}
               >
+                {categories.map((category) => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} sm={3}>
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ja}>
+              <DatePicker
+                label="日付"
+                value={selectedDate}
+                onChange={setSelectedDate}
+                slotProps={{ textField: { fullWidth: true } }}
+              />
+            </LocalizationProvider>
+          </Grid>
+          
+            <Grid item xs={12} sm={2}>
+            <TextField
+              label="数量"
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              fullWidth
+            />
+          </Grid>
+          
+            <Grid item xs={12} sm={2}>
+            <Button
+              variant="contained"
+              onClick={handleAddData}
+              disabled={!selectedCategory || !selectedDate || !quantity}
+              fullWidth
+              sx={{ height: '100%' }}
+            >
                 {editMode ? 'データを更新' : 'データを追加'}
               </Button>
             </Grid>
@@ -841,7 +841,7 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
                   sx={{ height: '100%' }}
                 >
                   キャンセル
-                </Button>
+            </Button>
               </Grid>
             )}
           </Grid>
