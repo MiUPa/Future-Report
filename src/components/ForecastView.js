@@ -87,6 +87,101 @@ function ForecastView({ categories, salesData }) {
     setForecastMethod(event.target.value);
   };
 
+  // 単純指数平滑法（Simple Exponential Smoothing）
+  const calculateSES = useCallback((values, periods) => {
+    const alpha = 0.2; // 平滑化係数
+    let forecast = values[0];
+    
+    // 実測値の期間の予測値を計算
+    for (let i = 1; i < values.length; i++) {
+      forecast = alpha * values[i] + (1 - alpha) * forecast;
+    }
+    
+    // 将来の予測値（すべての期間で同じ値）
+    return Array(periods).fill(forecast);
+  }, []);
+
+  // ホルト法（Holt's Linear Trend Method）- トレンドを考慮
+  const calculateHolt = useCallback((values, periods) => {
+    const alpha = 0.2; // レベルの平滑化係数
+    const beta = 0.1;  // トレンドの平滑化係数
+    
+    // 初期値の設定
+    let level = values[0];
+    let trend = values[1] - values[0];
+    
+    // 実測値の期間のレベルとトレンドを計算
+    for (let i = 1; i < values.length; i++) {
+      const oldLevel = level;
+      level = alpha * values[i] + (1 - alpha) * (level + trend);
+      trend = beta * (level - oldLevel) + (1 - beta) * trend;
+    }
+    
+    // 将来の予測値を計算
+    const forecasts = [];
+    for (let i = 1; i <= periods; i++) {
+      forecasts.push(level + i * trend);
+    }
+    
+    return forecasts;
+  }, []);
+
+  // ホルト・ウィンターズ法（Holt-Winters Method）- トレンドと季節性を考慮
+  const calculateHoltWinters = useCallback((values, periods) => {
+    // データが少なすぎる場合はホルト法を使用
+    if (values.length < 12) {
+      return calculateHolt(values, periods);
+    }
+    
+    const alpha = 0.2; // レベルの平滑化係数
+    const beta = 0.1;  // トレンドの平滑化係数
+    const gamma = 0.3; // 季節性の平滑化係数
+    const seasonLength = 12; // 季節の長さ（月次データの場合は12）
+    
+    // 季節性の初期値を計算
+    const seasonalIndices = [];
+    for (let i = 0; i < seasonLength; i++) {
+      let sum = 0;
+      let count = 0;
+      for (let j = i; j < values.length; j += seasonLength) {
+        if (j < values.length) {
+          sum += values[j];
+          count++;
+        }
+      }
+      seasonalIndices.push(count > 0 ? sum / count : 1);
+    }
+    
+    // 季節性の平均を1に正規化
+    const seasonalSum = seasonalIndices.reduce((a, b) => a + b, 0) / seasonLength;
+    for (let i = 0; i < seasonLength; i++) {
+      seasonalIndices[i] /= seasonalSum;
+    }
+    
+    // 初期値の設定
+    let level = values[0];
+    let trend = (values[seasonLength] - values[0]) / seasonLength;
+    
+    // 実測値の期間のレベル、トレンド、季節性を計算
+    for (let i = 0; i < values.length; i++) {
+      const oldLevel = level;
+      const seasonalIndex = i % seasonLength;
+      
+      level = alpha * (values[i] / seasonalIndices[seasonalIndex]) + (1 - alpha) * (level + trend);
+      trend = beta * (level - oldLevel) + (1 - beta) * trend;
+      seasonalIndices[seasonalIndex] = gamma * (values[i] / level) + (1 - gamma) * seasonalIndices[seasonalIndex];
+    }
+    
+    // 将来の予測値を計算
+    const forecasts = [];
+    for (let i = 1; i <= periods; i++) {
+      const forecastIndex = (values.length + i - 1) % seasonLength;
+      forecasts.push((level + i * trend) * seasonalIndices[forecastIndex]);
+    }
+    
+    return forecasts;
+  }, [calculateHolt]);
+
   const calculateForecast = useCallback(async (data) => {
     if (!data || Object.keys(data).length === 0) return null;
 
@@ -181,102 +276,7 @@ function ForecastView({ categories, salesData }) {
       setIsLoading(false);
       return null;
     }
-  }, [forecastMethod, forecastPeriod]);
-
-  // 単純指数平滑法（Simple Exponential Smoothing）
-  const calculateSES = (values, periods) => {
-    const alpha = 0.2; // 平滑化係数
-    let forecast = values[0];
-    
-    // 実測値の期間の予測値を計算
-    for (let i = 1; i < values.length; i++) {
-      forecast = alpha * values[i] + (1 - alpha) * forecast;
-    }
-    
-    // 将来の予測値（すべての期間で同じ値）
-    return Array(periods).fill(forecast);
-  };
-
-  // ホルト法（Holt's Linear Trend Method）- トレンドを考慮
-  const calculateHolt = (values, periods) => {
-    const alpha = 0.2; // レベルの平滑化係数
-    const beta = 0.1;  // トレンドの平滑化係数
-    
-    // 初期値の設定
-    let level = values[0];
-    let trend = values[1] - values[0];
-    
-    // 実測値の期間のレベルとトレンドを計算
-    for (let i = 1; i < values.length; i++) {
-      const oldLevel = level;
-      level = alpha * values[i] + (1 - alpha) * (level + trend);
-      trend = beta * (level - oldLevel) + (1 - beta) * trend;
-    }
-    
-    // 将来の予測値を計算
-    const forecasts = [];
-    for (let i = 1; i <= periods; i++) {
-      forecasts.push(level + i * trend);
-    }
-    
-    return forecasts;
-  };
-
-  // ホルト・ウィンターズ法（Holt-Winters Method）- トレンドと季節性を考慮
-  const calculateHoltWinters = (values, periods) => {
-    // データが少なすぎる場合はホルト法を使用
-    if (values.length < 12) {
-      return calculateHolt(values, periods);
-    }
-    
-    const alpha = 0.2; // レベルの平滑化係数
-    const beta = 0.1;  // トレンドの平滑化係数
-    const gamma = 0.3; // 季節性の平滑化係数
-    const seasonLength = 12; // 季節の長さ（月次データの場合は12）
-    
-    // 季節性の初期値を計算
-    const seasonalIndices = [];
-    for (let i = 0; i < seasonLength; i++) {
-      let sum = 0;
-      let count = 0;
-      for (let j = i; j < values.length; j += seasonLength) {
-        if (j < values.length) {
-          sum += values[j];
-          count++;
-        }
-      }
-      seasonalIndices.push(count > 0 ? sum / count : 1);
-    }
-    
-    // 季節性の平均を1に正規化
-    const seasonalSum = seasonalIndices.reduce((a, b) => a + b, 0) / seasonLength;
-    for (let i = 0; i < seasonLength; i++) {
-      seasonalIndices[i] /= seasonalSum;
-    }
-    
-    // 初期値の設定
-    let level = values[0];
-    let trend = (values[seasonLength] - values[0]) / seasonLength;
-    
-    // 実測値の期間のレベル、トレンド、季節性を計算
-    for (let i = 0; i < values.length; i++) {
-      const oldLevel = level;
-      const seasonalIndex = i % seasonLength;
-      
-      level = alpha * (values[i] / seasonalIndices[seasonalIndex]) + (1 - alpha) * (level + trend);
-      trend = beta * (level - oldLevel) + (1 - beta) * trend;
-      seasonalIndices[seasonalIndex] = gamma * (values[i] / level) + (1 - gamma) * seasonalIndices[seasonalIndex];
-    }
-    
-    // 将来の予測値を計算
-    const forecasts = [];
-    for (let i = 1; i <= periods; i++) {
-      const forecastIndex = (values.length + i - 1) % seasonLength;
-      forecasts.push((level + i * trend) * seasonalIndices[forecastIndex]);
-    }
-    
-    return forecasts;
-  };
+  }, [forecastMethod, forecastPeriod, calculateSES, calculateHolt, calculateHoltWinters, calculateSARIMA, calculateETS, calculateProphet, calculateEnsemble]);
 
   useEffect(() => {
     try {

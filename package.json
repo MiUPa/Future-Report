@@ -28,6 +28,7 @@
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
+    "react-router-dom": "^6.29.0",
     "react-scripts": "^5.0.1",
     "stream-browserify": "^3.0.0",
     "timeseries-analysis": "^1.0.12",
@@ -35,7 +36,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-app-rewired start",
+    "start": "REACT_APP_HOMEPAGE=/ react-app-rewired start",
+    "start:prod": "react-app-rewired start",
     "build": "react-app-rewired build && cp public/.nojekyll build/ && cp public/404.html build/",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",

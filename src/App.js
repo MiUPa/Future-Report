@@ -16,7 +16,12 @@ const theme = createTheme({
   },
 });
 
-function App() {
+function App({ basename }) {
+  // デバッグ用：現在のbasenameを表示
+  useEffect(() => {
+    console.log('App component using basename:', basename);
+  }, [basename]);
+
   // リセット確認ダイアログの状態
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   // タブの状態管理
