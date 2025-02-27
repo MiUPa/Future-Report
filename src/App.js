@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { Container, Box, Typography, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
-import CategoryManager from './components/CategoryManager';
+import { Container, Box, Typography, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Tabs, Tab } from '@mui/material';
 import DataInput from './components/DataInput';
 import ForecastView from './components/ForecastView';
 
@@ -20,6 +19,8 @@ const theme = createTheme({
 function App() {
   // リセット確認ダイアログの状態
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  // タブの状態管理
+  const [activeTab, setActiveTab] = useState(0);
 
   // localStorage から初期データを読み込む（エラーハンドリング追加）
   const [categories, setCategories] = useState(() => {
@@ -74,6 +75,11 @@ function App() {
     }
   };
 
+  // タブ切り替え処理
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -97,21 +103,33 @@ function App() {
             </Button>
           </Box>
           
-          <CategoryManager 
-            categories={categories} 
-            setCategories={setCategories} 
-          />
+          {/* タブインターフェース */}
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs value={activeTab} onChange={handleTabChange} aria-label="basic tabs example">
+              <Tab label="データ管理" />
+              <Tab label="需要予測" />
+            </Tabs>
+          </Box>
           
-          <DataInput 
-            categories={categories} 
-            salesData={salesData} 
-            setSalesData={setSalesData} 
-          />
+          {/* タブコンテンツ */}
+          <Box role="tabpanel" hidden={activeTab !== 0}>
+            {activeTab === 0 && (
+              <DataInput 
+                categories={categories} 
+                salesData={salesData} 
+                setSalesData={setSalesData} 
+              />
+            )}
+          </Box>
           
-          <ForecastView 
-            categories={categories} 
-            salesData={salesData} 
-          />
+          <Box role="tabpanel" hidden={activeTab !== 1}>
+            {activeTab === 1 && (
+              <ForecastView 
+                categories={categories} 
+                salesData={salesData} 
+              />
+            )}
+          </Box>
         </Box>
 
         {/* リセット確認ダイアログ */}

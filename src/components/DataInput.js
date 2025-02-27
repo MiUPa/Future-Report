@@ -294,17 +294,217 @@ function DataInput({ categories, salesData, setSalesData }) {
     const file = event.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImportData(e.target.result);
-    };
-    reader.readAsText(file);
+    // ファイルサイズの制限（10MB）
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`ファイルサイズが大きすぎます（${Math.round(file.size / (1024 * 1024))}MB）。10MB以下のファイルを選択してください。`);
+      event.target.value = null;
+      return;
+    }
+
+    // 小さいファイルの場合は通常の方法で読み込む
+    if (file.size < 1 * 1024 * 1024) { // 1MB未満
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImportData(e.target.result);
+      };
+      reader.readAsText(file);
+    } else {
+      // 大きなファイルの場合は直接処理
+      setImportDialogOpen(false);
+      setSuccess('大きなファイルを処理しています。しばらくお待ちください...');
+      
+      // 非同期でファイル処理を開始
+      setTimeout(() => {
+        processLargeFile(file);
+      }, 100);
+    }
     
     // ファイル入力をリセット
     event.target.value = null;
   };
 
-  // データをインポート
+  // 大きなファイルを直接処理する関数
+  const processLargeFile = (file) => {
+    try {
+      // CSVファイルかJSONファイルかを判断
+      if (file.name.toLowerCase().endsWith('.json')) {
+        // JSONファイルの場合
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const jsonData = JSON.parse(e.target.result);
+            const newSalesData = { ...salesData, ...jsonData };
+            setSalesData(newSalesData);
+            setSuccess('JSONデータをインポートしました');
+          } catch (error) {
+            setError(`JSONデータの解析に失敗しました: ${error.message}`);
+          }
+        };
+        reader.onerror = () => {
+          setError('ファイルの読み込みに失敗しました');
+        };
+        reader.readAsText(file);
+      } else {
+        // CSVファイルの場合はストリーミング処理
+        processCSVFileInChunks(file);
+      }
+    } catch (error) {
+      console.error('ファイル処理エラー:', error);
+      setError(`ファイルの処理中にエラーが発生しました: ${error.message}`);
+    }
+  };
+
+  // CSVファイルをチャンクで処理する関数
+  const processCSVFileInChunks = (file) => {
+    const CHUNK_SIZE = 1024 * 1024; // 1MBずつ読み込む
+    let offset = 0;
+    let lineBuffer = '';
+    let isFirstChunk = true;
+    let headers = [];
+    let categoryIndex = -1;
+    let dateIndex = -1;
+    let quantityIndex = -1;
+    let newSalesData = { ...salesData };
+    let successCount = 0;
+    let errorCount = 0;
+    let totalBytesRead = 0;
+
+    // ファイルの一部を読み込む関数
+    const readNextChunk = () => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        if (e.target.result) {
+          try {
+            // 読み込んだチャンクを処理
+            totalBytesRead += e.target.result.length;
+            const progress = Math.min(100, Math.round((totalBytesRead / file.size) * 100));
+            setSuccess(`ファイル読み込み中... ${progress}%`);
+            
+            // 前回の残りと今回のチャンクを結合
+            const chunk = lineBuffer + e.target.result;
+            
+            // 完全な行に分割（最後の不完全な行は次のチャンクのために保存）
+            const lines = chunk.split('\n');
+            lineBuffer = lines.pop() || '';
+            
+            // 最初のチャンクの場合、ヘッダーを処理
+            if (isFirstChunk) {
+              isFirstChunk = false;
+              headers = lines[0].split(',');
+              
+              // ヘッダーの検証と列インデックスの特定
+              headers.forEach((header, index) => {
+                const headerLower = header.toLowerCase().trim();
+                if (headerLower === 'category') {
+                  categoryIndex = index;
+                } else if (headerLower === 'date') {
+                  dateIndex = index;
+                } else if (headerLower === 'quantity' || headerLower === 'sales') {
+                  quantityIndex = index;
+                }
+              });
+              
+              if (categoryIndex === -1 || dateIndex === -1 || quantityIndex === -1) {
+                throw new Error('CSVフォーマットが正しくありません。category, date, quantity/sales の列が必要です');
+              }
+              
+              // ヘッダー行をスキップ
+              lines.shift();
+            }
+            
+            // 各行を処理
+            for (const line of lines) {
+              if (!line.trim()) continue; // 空行をスキップ
+              
+              try {
+                const values = line.split(',');
+                if (values.length >= Math.max(categoryIndex, dateIndex, quantityIndex) + 1) {
+                  const category = values[categoryIndex].trim();
+                  let dateStr = values[dateIndex].trim();
+                  const quantity = parseInt(values[quantityIndex].trim(), 10);
+                  
+                  // 日付フォーマットの変換
+                  let formattedDate;
+                  if (dateStr.includes('/')) {
+                    // YYYY/MM/DD または MM/DD/YYYY 形式を処理
+                    const dateParts = dateStr.split('/');
+                    if (dateParts.length === 3) {
+                      if (dateParts[0].length === 4) {
+                        // YYYY/MM/DD 形式
+                        const year = parseInt(dateParts[0], 10);
+                        const month = parseInt(dateParts[1], 10).toString().padStart(2, '0');
+                        const day = parseInt(dateParts[2], 10).toString().padStart(2, '0');
+                        formattedDate = `${year}-${month}-${day}`;
+                      } else {
+                        // MM/DD/YYYY または DD/MM/YYYY 形式と仮定
+                        // ここでは MM/DD/YYYY と仮定
+                        const year = parseInt(dateParts[2], 10);
+                        const month = parseInt(dateParts[0], 10).toString().padStart(2, '0');
+                        const day = parseInt(dateParts[1], 10).toString().padStart(2, '0');
+                        formattedDate = `${year}-${month}-${day}`;
+                      }
+                    } else {
+                      throw new Error(`不正な日付フォーマット: ${dateStr}`);
+                    }
+                  } else {
+                    // すでに YYYY-MM-DD 形式と仮定
+                    formattedDate = dateStr;
+                  }
+                  
+                  if (!isNaN(quantity) && category && formattedDate) {
+                    if (!newSalesData[category]) {
+                      newSalesData[category] = {};
+                    }
+                    newSalesData[category][formattedDate] = quantity;
+                    successCount++;
+                    
+                    // 1000件ごとに進捗を更新
+                    if (successCount % 1000 === 0) {
+                      setSuccess(`処理中... ${successCount}件のデータを処理しました`);
+                    }
+                  } else {
+                    errorCount++;
+                  }
+                } else {
+                  errorCount++;
+                }
+              } catch (err) {
+                console.error(`行の処理中にエラー:`, err);
+                errorCount++;
+              }
+            }
+            
+            // まだ読み込むデータがあれば次のチャンクを読み込む
+            if (offset < file.size) {
+              readNextChunk();
+            } else {
+              // 全てのチャンクを処理完了
+              finishImport(newSalesData, successCount, errorCount);
+            }
+          } catch (error) {
+            console.error('チャンク処理エラー:', error);
+            setError(`データの処理中にエラーが発生しました: ${error.message}`);
+          }
+        }
+      };
+      
+      reader.onerror = () => {
+        setError('ファイルの読み込みに失敗しました');
+      };
+      
+      // ファイルの一部を切り出して読み込む
+      const slice = file.slice(offset, offset + CHUNK_SIZE);
+      reader.readAsText(slice);
+      offset += CHUNK_SIZE;
+    };
+    
+    // 最初のチャンクを読み込み開始
+    readNextChunk();
+  };
+
+  // データをインポート（テキストエリアからの入力用）
   const handleImportData = () => {
     try {
       if (!importData) {
@@ -312,6 +512,23 @@ function DataInput({ categories, salesData, setSalesData }) {
         return;
       }
 
+      // 処理開始前にダイアログを閉じる（UIをブロックしないため）
+      setImportDialogOpen(false);
+      setSuccess('インポート処理を開始しました。大きなデータの場合は時間がかかることがあります...');
+
+      // 非同期処理でインポートを実行
+      setTimeout(() => {
+        processImportData();
+      }, 100);
+    } catch (error) {
+      console.error('インポートエラー:', error);
+      setError(`データのインポート中にエラーが発生しました: ${error.message}`);
+    }
+  };
+
+  // インポートデータを実際に処理する関数
+  const processImportData = () => {
+    try {
       let newSalesData = { ...salesData };
       
       // JSONかCSVかを判断
@@ -319,47 +536,149 @@ function DataInput({ categories, salesData, setSalesData }) {
         // JSONデータ
         const importedData = JSON.parse(importData);
         newSalesData = { ...newSalesData, ...importedData };
+        setSalesData(newSalesData);
+        setSuccess('JSONデータをインポートしました');
       } else {
         // CSVデータ
-        const lines = importData.trim().split('\n');
-        const headers = lines[0].split(',');
-        
-        // ヘッダーの検証
-        if (headers.length < 3 || 
-            !headers.includes('category') || 
-            !headers.includes('date') || 
-            !headers.includes('quantity')) {
-          setError('CSVフォーマットが正しくありません。category,date,quantityの列が必要です');
-          return;
+        processCSVData(newSalesData);
+      }
+    } catch (error) {
+      console.error('インポート処理エラー:', error);
+      setError(`データの処理中にエラーが発生しました: ${error.message}`);
+    }
+  };
+
+  // CSVデータを処理する関数
+  const processCSVData = (newSalesData) => {
+    try {
+      const lines = importData.trim().split('\n');
+      if (lines.length === 0) {
+        setError('CSVデータが空です');
+        return;
+      }
+
+      const headers = lines[0].split(',');
+      
+      // ヘッダーの検証と列インデックスの特定
+      let categoryIndex = -1;
+      let dateIndex = -1;
+      let quantityIndex = -1;
+      
+      headers.forEach((header, index) => {
+        const headerLower = header.toLowerCase().trim();
+        if (headerLower === 'category') {
+          categoryIndex = index;
+        } else if (headerLower === 'date') {
+          dateIndex = index;
+        } else if (headerLower === 'quantity' || headerLower === 'sales') {
+          quantityIndex = index;
         }
-        
-        const categoryIndex = headers.indexOf('category');
-        const dateIndex = headers.indexOf('date');
-        const quantityIndex = headers.indexOf('quantity');
-        
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          if (values.length >= 3) {
-            const category = values[categoryIndex].trim();
-            const date = values[dateIndex].trim();
-            const quantity = parseInt(values[quantityIndex].trim(), 10);
-            
-            if (!isNaN(quantity) && category && date) {
-              if (!newSalesData[category]) {
-                newSalesData[category] = {};
-              }
-              newSalesData[category][date] = quantity;
-            }
-          }
-        }
+      });
+      
+      if (categoryIndex === -1 || dateIndex === -1 || quantityIndex === -1) {
+        setError('CSVフォーマットが正しくありません。category, date, quantity/sales の列が必要です');
+        return;
       }
       
-      setSalesData(newSalesData);
-      setImportDialogOpen(false);
-      setSuccess('データをインポートしました');
+      // 大きなファイルを処理するためのチャンク処理
+      const chunkSize = 1000; // 一度に処理する行数
+      let currentChunk = 0;
+      let successCount = 0;
+      let errorCount = 0;
+      
+      // チャンク処理関数
+      const processChunk = () => {
+        const startIdx = currentChunk * chunkSize + 1; // ヘッダー行をスキップ
+        const endIdx = Math.min(startIdx + chunkSize, lines.length);
+        
+        for (let i = startIdx; i < endIdx; i++) {
+          if (!lines[i].trim()) continue; // 空行をスキップ
+          
+          try {
+            const values = lines[i].split(',');
+            if (values.length >= Math.max(categoryIndex, dateIndex, quantityIndex) + 1) {
+              const category = values[categoryIndex].trim();
+              let dateStr = values[dateIndex].trim();
+              const quantity = parseInt(values[quantityIndex].trim(), 10);
+              
+              // 日付フォーマットの変換
+              let formattedDate;
+              if (dateStr.includes('/')) {
+                // YYYY/MM/DD または MM/DD/YYYY 形式を処理
+                const dateParts = dateStr.split('/');
+                if (dateParts.length === 3) {
+                  if (dateParts[0].length === 4) {
+                    // YYYY/MM/DD 形式
+                    const year = parseInt(dateParts[0], 10);
+                    const month = parseInt(dateParts[1], 10).toString().padStart(2, '0');
+                    const day = parseInt(dateParts[2], 10).toString().padStart(2, '0');
+                    formattedDate = `${year}-${month}-${day}`;
+                  } else {
+                    // MM/DD/YYYY または DD/MM/YYYY 形式と仮定
+                    // ここでは MM/DD/YYYY と仮定
+                    const year = parseInt(dateParts[2], 10);
+                    const month = parseInt(dateParts[0], 10).toString().padStart(2, '0');
+                    const day = parseInt(dateParts[1], 10).toString().padStart(2, '0');
+                    formattedDate = `${year}-${month}-${day}`;
+                  }
+                } else {
+                  throw new Error(`不正な日付フォーマット: ${dateStr}`);
+                }
+              } else {
+                // すでに YYYY-MM-DD 形式と仮定
+                formattedDate = dateStr;
+              }
+              
+              if (!isNaN(quantity) && category && formattedDate) {
+                if (!newSalesData[category]) {
+                  newSalesData[category] = {};
+                }
+                newSalesData[category][formattedDate] = quantity;
+                successCount++;
+              } else {
+                errorCount++;
+              }
+            } else {
+              errorCount++;
+            }
+          } catch (err) {
+            console.error(`行 ${i} の処理中にエラー:`, err);
+            errorCount++;
+          }
+        }
+        
+        // 進捗状況の更新
+        const progress = Math.min(100, Math.round((endIdx / lines.length) * 100));
+        setSuccess(`インポート中... ${progress}% 完了 (${successCount}件処理済み)`);
+        
+        // 次のチャンクがあれば処理、なければ完了
+        currentChunk++;
+        if (endIdx < lines.length) {
+          // 次のチャンクを非同期で処理（UIをブロックしないため）
+          setTimeout(processChunk, 0);
+        } else {
+          // 全チャンクの処理完了
+          finishImport(newSalesData, successCount, errorCount);
+        }
+      };
+      
+      // 最初のチャンクを処理開始
+      processChunk();
     } catch (error) {
-      console.error('インポートエラー:', error);
-      setError('データのインポート中にエラーが発生しました');
+      console.error('CSV処理エラー:', error);
+      setError(`CSVデータの処理中にエラーが発生しました: ${error.message}`);
+    }
+  };
+
+  // インポート完了時の処理
+  const finishImport = (newSalesData, successCount, errorCount) => {
+    if (successCount > 0) {
+      setSalesData(newSalesData);
+      setSuccess(`${successCount}件のデータをインポートしました${errorCount > 0 ? `（${errorCount}件の無効なデータはスキップされました）` : ''}`);
+    } else if (errorCount > 0) {
+      setError(`インポートに失敗しました。${errorCount}件の無効なデータがありました`);
+    } else {
+      setError('インポートするデータがありませんでした');
     }
   };
 
