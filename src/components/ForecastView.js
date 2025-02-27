@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -13,7 +13,9 @@ import {
   FormControlLabel,
   Radio,
   RadioGroup,
-  CircularProgress
+  CircularProgress,
+  Button,
+  Slider
 } from '@mui/material';
 import {
   Chart as ChartJS,
@@ -48,6 +50,9 @@ function ForecastView({ categories, salesData }) {
   const [forecastPeriod, setForecastPeriod] = useState(3); // デフォルトは3ヶ月
   const [forecastMethod, setForecastMethod] = useState('holt-winters'); // デフォルトはHolt-Winters法
   const [isLoading, setIsLoading] = useState(false); // 予測計算中のローディング状態
+  const [dateRange, setDateRange] = useState([0, 100]); // 表示範囲のパーセンテージ (0-100%)
+  const [allDates, setAllDates] = useState([]); // すべての日付を保持する状態
+  const chartRef = useRef(null);
 
   // 初期表示時に代表的なカテゴリを選択
   useEffect(() => {
@@ -182,6 +187,48 @@ function ForecastView({ categories, salesData }) {
     return forecasts;
   }, [calculateHolt]);
 
+  // 日付範囲スライダーの変更ハンドラー
+  const handleDateRangeChange = (event, newValue) => {
+    setDateRange(newValue);
+    updateChartZoom(newValue);
+  };
+
+  // 日付範囲をリセットする関数
+  const resetDateRange = () => {
+    setDateRange([0, 100]);
+    updateChartZoom([0, 100]);
+  };
+
+  // 日付範囲に基づいてチャートのズームを更新する関数
+  const updateChartZoom = (range) => {
+    if (!chartRef.current || !allDates || allDates.length === 0) {
+      return;
+    }
+
+    try {
+      const chart = chartRef.current;
+      
+      // インデックスの計算（範囲外にならないように制限）
+      const minIndex = Math.max(0, Math.floor(allDates.length * range[0] / 100));
+      const maxIndex = Math.min(Math.floor(allDates.length * range[1] / 100), allDates.length - 1);
+      
+      // 日付範囲の設定
+      const minDate = allDates[minIndex];
+      const maxDate = allDates[maxIndex];
+      
+      console.log('日付範囲を設定:', minDate, maxDate, minIndex, maxIndex);
+      
+      // Chart.jsのX軸の範囲を更新
+      chart.options.scales.x.min = minDate;
+      chart.options.scales.x.max = maxDate;
+      
+      // チャートを更新
+      chart.update();
+    } catch (error) {
+      console.error('スライダー更新エラー:', error);
+    }
+  };
+
   const calculateForecast = useCallback(async (data) => {
     if (!data || Object.keys(data).length === 0) return null;
 
@@ -246,8 +293,11 @@ function ForecastView({ categories, salesData }) {
       // 日付を Date オブジェクトに変換
       const dateObjects = [...sortedDates, ...futureDates].map(dateStr => new Date(dateStr));
       
-      setIsLoading(false);
-      return {
+      // すべての日付を保存
+      setAllDates(dateObjects);
+      
+      // チャートデータを作成
+      const newChartData = {
         labels: dateObjects,
         datasets: [
           {
@@ -271,6 +321,9 @@ function ForecastView({ categories, salesData }) {
           }
         ]
       };
+      
+      setIsLoading(false);
+      return newChartData;
     } catch (error) {
       console.error('予測計算エラー:', error);
       setIsLoading(false);
@@ -284,6 +337,17 @@ function ForecastView({ categories, salesData }) {
       if (selectedCategory && salesData[selectedCategory]) {
         calculateForecast(salesData[selectedCategory]).then(newChartData => {
           setChartData(newChartData);
+          // 日付範囲をリセット
+          setDateRange([0, 100]);
+          
+          // チャートが更新されたら、少し遅延してズームをリセット
+          setTimeout(() => {
+            if (chartRef.current) {
+              chartRef.current.options.scales.x.min = undefined;
+              chartRef.current.options.scales.x.max = undefined;
+              chartRef.current.update();
+            }
+          }, 100);
         });
       } else {
         setChartData(null);
@@ -293,6 +357,16 @@ function ForecastView({ categories, salesData }) {
       setChartData(null);
     }
   }, [selectedCategory, salesData, forecastPeriod, forecastMethod, calculateForecast]);
+
+  // チャートが更新されたときにスライダーの値を適用
+  useEffect(() => {
+    if (chartRef.current && chartData) {
+      // 少し遅延してズームを適用（チャートの初期化が完了するのを待つ）
+      setTimeout(() => {
+        updateChartZoom(dateRange);
+      }, 200);
+    }
+  }, [chartData, dateRange]);
 
   // 予測モデルの説明テキスト
   const getModelDescription = () => {
@@ -314,6 +388,12 @@ function ForecastView({ categories, salesData }) {
       default:
         return '';
     }
+  };
+
+  // 日付をフォーマットする関数
+  const formatDate = (date) => {
+    if (!date) return '';
+    return date.toISOString().split('T')[0];
   };
 
   return (
@@ -426,54 +506,125 @@ function ForecastView({ categories, salesData }) {
           </Box>
         ) : (
           chartData && (
-            <Box sx={{ mt: 2, height: 400 }}>
-              <Line
-                data={chartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    x: {
-                      type: 'time',
-                      time: {
-                        unit: 'day',
-                        displayFormats: {
-                          day: 'yyyy-MM-dd'
+            <Box sx={{ mt: 2 }}>
+              {/* 日付範囲スライダー */}
+              <Box sx={{ mt: 3, px: 2, mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body2">
+                    表示期間の調整:
+                  </Typography>
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    onClick={resetDateRange}
+                  >
+                    表示範囲をリセット
+                  </Button>
+                </Box>
+                
+                <Slider
+                  value={dateRange}
+                  onChange={handleDateRangeChange}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(value) => {
+                    if (!allDates || allDates.length === 0) return '';
+                    const index = Math.min(
+                      Math.floor(allDates.length * value / 100),
+                      allDates.length - 1
+                    );
+                    return formatDate(allDates[index]);
+                  }}
+                  marks={[
+                    { value: 0, label: '開始' },
+                    { value: 100, label: '終了' }
+                  ]}
+                  sx={{ 
+                    '& .MuiSlider-thumb': { 
+                      width: 16, 
+                      height: 16 
+                    },
+                    '& .MuiSlider-track': { 
+                      height: 8 
+                    },
+                    '& .MuiSlider-rail': { 
+                      height: 8 
+                    }
+                  }}
+                />
+                
+                {/* 現在選択されている日付範囲を表示 */}
+                {allDates.length > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                    <Typography variant="caption">
+                      {formatDate(allDates[Math.floor(allDates.length * dateRange[0] / 100)])}
+                    </Typography>
+                    <Typography variant="caption">
+                      {formatDate(allDates[Math.min(Math.floor(allDates.length * dateRange[1] / 100), allDates.length - 1)])}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+              
+              <Box sx={{ height: 400 }}>
+                <Line
+                  ref={chartRef}
+                  data={chartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false, // アニメーションを無効化して更新を高速化
+                    scales: {
+                      x: {
+                        type: 'time',
+                        time: {
+                          unit: 'day',
+                          displayFormats: {
+                            day: 'yyyy-MM-dd'
+                          },
+                          tooltipFormat: 'yyyy-MM-dd'
                         },
-                        tooltipFormat: 'yyyy-MM-dd'
-                      },
-                      adapters: {
-                        date: {
-                          locale: ja
+                        adapters: {
+                          date: {
+                            locale: ja
+                          }
+                        },
+                        ticks: {
+                          autoSkip: true,
+                          maxTicksLimit: 20,
+                          maxRotation: 45
                         }
                       },
-                      ticks: {
-                        autoSkip: true,
-                        maxTicksLimit: 20,
-                        maxRotation: 45
+                      y: {
+                        beginAtZero: true
                       }
                     },
-                    y: {
-                      beginAtZero: true
-                    }
-                  },
-                  plugins: {
-                    title: {
-                      display: true,
-                      text: `${selectedCategory}の予測分析（${forecastPeriod === 12 ? '1年' : forecastPeriod + 'ヶ月'}）`
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function(context) {
-                          const label = context.dataset.label || '';
-                          const value = context.parsed.y;
-                          return `${label}: ${Math.round(value)}`;
+                    plugins: {
+                      title: {
+                        display: true,
+                        text: `${selectedCategory}の予測分析（${forecastPeriod === 12 ? '1年' : forecastPeriod + 'ヶ月'}）`
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            return `${label}: ${Math.round(value)}`;
+                          }
                         }
                       }
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+              </Box>
+              
+              <Box sx={{ mt: 2, px: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  <strong>グラフの操作方法:</strong>
+                  <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
+                    <li>スライダー: 左右のつまみを動かして表示範囲を調整</li>
+                  </ul>
+                </Typography>
+              </Box>
             </Box>
           )
         )}
