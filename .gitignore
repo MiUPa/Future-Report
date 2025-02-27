@@ -1,2 +1,46 @@
-/node_modules/
+# 依存関係
+/node_modules
+/.pnp
+.pnp.js
+
+# テスト
+/coverage
+
+# ビルド
+/build
+/dist
+
+# 環境変数
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ログ
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# エディタ設定
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# その他
 sample/
+.eslintcache
+.cache/
+.parcel-cache/
+
+# Python関連（以前使用していた場合）
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/

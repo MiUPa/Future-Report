@@ -1,5 +1,5 @@
 {
-  "name": "needs-catcher",
+  "name": "future-report",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -64,5 +64,5 @@
     "gh-pages": "^5.0.0",
     "react-app-rewired": "^2.2.1"
   },
-  "homepage": "http://localhost:3000"
+  "homepage": "https://miupa.github.io/Future-Report/"
 }
