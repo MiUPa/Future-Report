@@ -9,7 +9,9 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Grid
+  Grid,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
@@ -19,19 +21,37 @@ function DataInput({ categories, salesData, setSalesData }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [quantity, setQuantity] = useState('');
+  const [error, setError] = useState(null);
 
   const handleAddData = () => {
-    if (selectedCategory && selectedDate && quantity) {
-      const dateKey = selectedDate.toISOString().split('T')[0];
-      setSalesData({
-        ...salesData,
-        [selectedCategory]: {
-          ...(salesData[selectedCategory] || {}),
-          [dateKey]: parseInt(quantity, 10)
+    try {
+      if (selectedCategory && selectedDate && quantity) {
+        const dateKey = selectedDate.toISOString().split('T')[0];
+        const parsedQuantity = parseInt(quantity, 10);
+        
+        if (isNaN(parsedQuantity)) {
+          setError('数量は有効な数値である必要があります');
+          return;
         }
-      });
-      setQuantity('');
+        
+        setSalesData({
+          ...salesData,
+          [selectedCategory]: {
+            ...(salesData[selectedCategory] || {}),
+            [dateKey]: parsedQuantity
+          }
+        });
+        setQuantity('');
+        setError(null);
+      }
+    } catch (error) {
+      console.error('データ追加エラー:', error);
+      setError('データの追加中にエラーが発生しました');
     }
+  };
+
+  const handleCloseError = () => {
+    setError(null);
   };
 
   return (
@@ -92,6 +112,12 @@ function DataInput({ categories, salesData, setSalesData }) {
           </Grid>
         </Grid>
       </Paper>
+      
+      <Snackbar open={!!error} autoHideDuration={6000} onClose={handleCloseError}>
+        <Alert onClose={handleCloseError} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

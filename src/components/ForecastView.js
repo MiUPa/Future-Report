@@ -38,60 +38,82 @@ function ForecastView({ categories, salesData }) {
   const calculateForecast = (data) => {
     if (!data || Object.keys(data).length === 0) return null;
 
-    // データを日付でソート
-    const sortedDates = Object.keys(data).sort();
-    const values = sortedDates.map(date => data[date]);
+    try {
+      // データを日付でソート
+      const sortedDates = Object.keys(data).sort();
+      const values = sortedDates.map(date => data[date]);
 
-    // 単純指数平滑法のパラメータ
-    const alpha = 0.2;
-    let forecast = values[0];
-    const forecasts = [forecast];
+      // データが少なすぎる場合は計算しない
+      if (values.length === 0) return null;
 
-    // 既存データの予測値を計算
-    for (let i = 1; i < values.length; i++) {
-      forecast = alpha * values[i] + (1 - alpha) * forecast;
-      forecasts.push(forecast);
+      // 単純指数平滑法のパラメータ
+      const alpha = 0.2;
+      let forecast = values[0];
+      
+      // 実測値の期間の予測値を計算
+      for (let i = 1; i < values.length; i++) {
+        forecast = alpha * values[i] + (1 - alpha) * forecast;
+      }
+      
+      // 将来3ヶ月分の予測
+      const futureMonths = 3;
+      
+      // 将来の日付を生成
+      const lastDate = new Date(sortedDates[sortedDates.length - 1]);
+      const futureDates = Array.from({ length: futureMonths }, (_, i) => {
+        const date = new Date(lastDate);
+        date.setMonth(date.getMonth() + i + 1);
+        return date.toISOString().split('T')[0];
+      });
+
+      // 実績値のデータセット（実際のデータがある期間のみ）
+      const actualData = [...values, ...Array(futureMonths).fill(null)];
+      
+      // 予測値のデータセット
+      // 最後の実測値の位置から予測値を表示
+      const predictionData = Array(values.length).fill(null);
+      
+      // 最後の実測値と同じ値から予測線を開始
+      predictionData[values.length - 1] = values[values.length - 1];
+      
+      // 将来の予測値
+      const futurePredictions = Array(futureMonths).fill(forecast);
+      
+      return {
+        labels: [...sortedDates, ...futureDates],
+        datasets: [
+          {
+            label: '実績値',
+            data: actualData,
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1
+          },
+          {
+            label: '予測値',
+            data: [...predictionData, ...futurePredictions],
+            borderColor: 'rgb(255, 99, 132)',
+            borderDash: [5, 5],
+            tension: 0.1
+          }
+        ]
+      };
+    } catch (error) {
+      console.error('予測計算エラー:', error);
+      return null;
     }
-
-    // 将来3ヶ月分の予測
-    const futureMonths = 3;
-    const lastValue = forecast;
-    for (let i = 0; i < futureMonths; i++) {
-      forecasts.push(lastValue);
-    }
-
-    // 将来の日付を生成
-    const lastDate = new Date(sortedDates[sortedDates.length - 1]);
-    const futureDates = Array.from({ length: futureMonths }, (_, i) => {
-      const date = new Date(lastDate);
-      date.setMonth(date.getMonth() + i + 1);
-      return date.toISOString().split('T')[0];
-    });
-
-    return {
-      labels: [...sortedDates, ...futureDates],
-      datasets: [
-        {
-          label: '実績値',
-          data: [...values, ...Array(futureMonths).fill(null)],
-          borderColor: 'rgb(75, 192, 192)',
-          tension: 0.1
-        },
-        {
-          label: '予測値',
-          data: forecasts,
-          borderColor: 'rgb(255, 99, 132)',
-          borderDash: [5, 5],
-          tension: 0.1
-        }
-      ]
-    };
   };
 
   useEffect(() => {
-    if (selectedCategory && salesData[selectedCategory]) {
-      const newChartData = calculateForecast(salesData[selectedCategory]);
-      setChartData(newChartData);
+    try {
+      if (selectedCategory && salesData[selectedCategory]) {
+        const newChartData = calculateForecast(salesData[selectedCategory]);
+        setChartData(newChartData);
+      } else {
+        setChartData(null);
+      }
+    } catch (error) {
+      console.error('チャートデータ設定エラー:', error);
+      setChartData(null);
     }
   }, [selectedCategory, salesData]);
 
