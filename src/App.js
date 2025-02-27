@@ -88,10 +88,10 @@ function App() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <div>
               <Typography variant="h3" component="h1" gutterBottom>
-                NeedsCatcher
+                Future-Report
               </Typography>
               <Typography variant="h6" color="text.secondary" gutterBottom>
-                中長期需要予測システム
+                高度予測分析システム
               </Typography>
             </div>
             <Button 
@@ -107,7 +107,7 @@ function App() {
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs value={activeTab} onChange={handleTabChange} aria-label="basic tabs example">
               <Tab label="データ管理" />
-              <Tab label="需要予測" />
+              <Tab label="予測分析" />
             </Tabs>
           </Box>
           

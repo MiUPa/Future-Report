@@ -170,7 +170,7 @@ function ForecastView({ categories, salesData }) {
   return (
     <Box sx={{ mb: 4 }}>
       <Typography variant="h5" gutterBottom>
-        需要予測
+        予測分析
       </Typography>
       <Paper elevation={2} sx={{ p: 2 }}>
         <Grid container spacing={2} alignItems="center">
@@ -250,7 +250,7 @@ function ForecastView({ categories, salesData }) {
                 plugins: {
                   title: {
                     display: true,
-                    text: `${selectedCategory}の需要予測（${forecastPeriod === 12 ? '1年' : forecastPeriod + 'ヶ月'}）`
+                    text: `${selectedCategory}の予測分析（${forecastPeriod === 12 ? '1年' : forecastPeriod + 'ヶ月'}）`
                   }
                 }
               }}

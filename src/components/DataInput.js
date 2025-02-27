@@ -736,7 +736,7 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
   return (
     <Box sx={{ mb: 4 }}>
       <Typography variant="h5" gutterBottom>
-        販売データ管理
+        データ管理
       </Typography>
       <Paper elevation={2} sx={{ p: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
