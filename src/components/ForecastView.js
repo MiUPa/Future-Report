@@ -204,37 +204,37 @@ function ForecastView({ categories, salesData }) {
       // 選択された予測手法に基づいて予測を実行
       if (forecastMethod === 'ses') {
         // 単純指数平滑法（Simple Exponential Smoothing）
-        futurePredictions = calculateSES(values, forecastPeriod);
+        futurePredictions = calculateSES(values, forecastPeriod * 30); // 月数 × 30日
       } else if (forecastMethod === 'holt') {
         // ホルト法（Holt's Linear Trend Method）
-        futurePredictions = calculateHolt(values, forecastPeriod);
+        futurePredictions = calculateHolt(values, forecastPeriod * 30);
       } else if (forecastMethod === 'holt-winters') {
         // ホルト・ウィンターズ法（Holt-Winters Method）
-        futurePredictions = calculateHoltWinters(values, forecastPeriod);
+        futurePredictions = calculateHoltWinters(values, forecastPeriod * 30);
       } else if (forecastMethod === 'sarima') {
         // SARIMA（季節性ARIMA）モデル
-        futurePredictions = await calculateSARIMA(values, forecastPeriod);
+        futurePredictions = await calculateSARIMA(values, forecastPeriod * 30);
       } else if (forecastMethod === 'ets') {
         // ETS（指数平滑状態空間）モデル
-        futurePredictions = calculateETS(values, forecastPeriod);
+        futurePredictions = calculateETS(values, forecastPeriod * 30);
       } else if (forecastMethod === 'prophet') {
         // Prophetモデル
-        futurePredictions = await calculateProphet(data, forecastPeriod);
+        futurePredictions = await calculateProphet(data, forecastPeriod * 30);
       } else if (forecastMethod === 'ensemble') {
         // アンサンブルモデル（複数モデルの組み合わせ）
-        futurePredictions = await calculateEnsemble(values, data, forecastPeriod);
+        futurePredictions = await calculateEnsemble(values, data, forecastPeriod * 30);
       }
       
-      // 将来の日付を生成
+      // 将来の日付を生成（日単位）
       const lastDate = new Date(sortedDates[sortedDates.length - 1]);
-      const futureDates = Array.from({ length: forecastPeriod }, (_, i) => {
+      const futureDates = Array.from({ length: forecastPeriod * 30 }, (_, i) => {
         const date = new Date(lastDate);
-        date.setMonth(date.getMonth() + i + 1);
+        date.setDate(date.getDate() + i + 1); // 日単位で増加
         return date.toISOString().split('T')[0];
       });
 
       // 実績値のデータセット（実際のデータがある期間のみ）
-      const actualData = [...values, ...Array(forecastPeriod).fill(null)];
+      const actualData = [...values, ...Array(forecastPeriod * 30).fill(null)];
       
       // 予測値のデータセット
       // 最後の実測値の位置から予測値を表示
@@ -276,7 +276,8 @@ function ForecastView({ categories, salesData }) {
       setIsLoading(false);
       return null;
     }
-  }, [forecastMethod, forecastPeriod, calculateSES, calculateHolt, calculateHoltWinters, calculateSARIMA, calculateETS, calculateProphet, calculateEnsemble]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forecastMethod, forecastPeriod, calculateSES, calculateHolt, calculateHoltWinters]);
 
   useEffect(() => {
     try {
@@ -435,9 +436,9 @@ function ForecastView({ categories, salesData }) {
                     x: {
                       type: 'time',
                       time: {
-                        unit: 'month',
+                        unit: 'day',
                         displayFormats: {
-                          month: 'yyyy-MM-dd'
+                          day: 'yyyy-MM-dd'
                         },
                         tooltipFormat: 'yyyy-MM-dd'
                       },
@@ -447,7 +448,8 @@ function ForecastView({ categories, salesData }) {
                         }
                       },
                       ticks: {
-                        autoSkip: false,
+                        autoSkip: true,
+                        maxTicksLimit: 20,
                         maxRotation: 45
                       }
                     },
