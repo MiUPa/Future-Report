@@ -12,6 +12,20 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Future-Report - 予測分析アプリケーション</title>
+    <!-- GitHub Pages用のSPAリダイレクト処理 -->
+    <script type="text/javascript">
+      // 404.htmlからリダイレクトされた場合の処理
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) { 
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
   </head>
   <body>
     <noscript>このアプリケーションを実行するにはJavaScriptを有効にする必要があります。</noscript>

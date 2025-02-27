@@ -36,7 +36,7 @@
   },
   "scripts": {
     "start": "react-app-rewired start",
-    "build": "react-app-rewired build && cp public/.nojekyll build/",
+    "build": "react-app-rewired build && cp public/.nojekyll build/ && cp public/404.html build/",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",

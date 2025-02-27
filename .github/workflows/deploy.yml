@@ -36,6 +36,9 @@ jobs:
       - name: Create .nojekyll file 📄
         run: touch build/.nojekyll
 
+      - name: Remove README from build 📝
+        run: rm -f build/README.md
+
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
