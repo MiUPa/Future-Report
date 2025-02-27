@@ -521,6 +521,8 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
       
       // 新しい販売データオブジェクトを作成
       const newSalesData = { ...salesData };
+      // 新しいカテゴリーを追跡するための配列
+      const newCategoriesToAdd = [];
       
       // JSONデータの場合
       if (fileType === 'json') {
@@ -531,6 +533,11 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
           // 各カテゴリーのデータを処理
           Object.entries(jsonData).forEach(([category, dates]) => {
             if (typeof dates === 'object' && dates !== null) {
+              // 新しいカテゴリーを検出
+              if (!categories.includes(category) && !newCategoriesToAdd.includes(category)) {
+                newCategoriesToAdd.push(category);
+              }
+              
               if (!newSalesData[category]) {
                 newSalesData[category] = {};
               }
@@ -545,9 +552,18 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
             }
           });
           
+          // 新しいカテゴリーを追加
+          if (newCategoriesToAdd.length > 0) {
+            setCategories([...categories, ...newCategoriesToAdd]);
+          }
+          
           // データを更新して成功メッセージを表示
           setSalesData(newSalesData);
-          setSuccess('JSONデータをインポートしました');
+          
+          const categoryMessage = newCategoriesToAdd.length > 0 
+            ? `（${newCategoriesToAdd.length}個の新しいカテゴリーを追加しました）` 
+            : '';
+          setSuccess(`JSONデータをインポートしました${categoryMessage}`);
         } catch (error) {
           console.error('JSONインポートエラー:', error);
           setError(`JSONデータの処理中にエラーが発生しました: ${error.message}`);
@@ -614,6 +630,11 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
                   }
                 }
                 
+                // 新しいカテゴリーを検出
+                if (category && !categories.includes(category) && !newCategoriesToAdd.includes(category)) {
+                  newCategoriesToAdd.push(category);
+                }
+                
                 // データを追加
                 if (!isNaN(quantity) && category && formattedDate) {
                   if (!newSalesData[category]) {
@@ -633,11 +654,19 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
             }
           }
           
+          // 新しいカテゴリーを追加
+          if (newCategoriesToAdd.length > 0) {
+            setCategories([...categories, ...newCategoriesToAdd]);
+          }
+          
           // データを更新して成功メッセージを表示
           setSalesData(newSalesData);
           
           if (successCount > 0) {
-            setSuccess(`${successCount}件のデータをインポートしました${errorCount > 0 ? `（${errorCount}件の無効なデータはスキップされました）` : ''}`);
+            const categoryMessage = newCategoriesToAdd.length > 0 
+              ? `（${newCategoriesToAdd.length}個の新しいカテゴリーを追加しました）` 
+              : '';
+            setSuccess(`${successCount}件のデータをインポートしました${errorCount > 0 ? `（${errorCount}件の無効なデータはスキップされました）` : ''}${categoryMessage}`);
           } else {
             setError('有効なデータがインポートされませんでした');
           }
