@@ -15,6 +15,7 @@ import Tab from '@mui/material/Tab';
 import Papa from 'papaparse';
 import DataInput from './components/DataInput';
 import ForecastView from './components/ForecastView';
+import HowToUse from './components/HowToUse';
 
 // テーマの設定
 const theme = createTheme({
@@ -276,11 +277,13 @@ function App({ basename }) {
           
           <Tabs 
             value={activeTab} 
-            onChange={(e, newValue) => setActiveTab(newValue)}
+            onChange={(event, newValue) => setActiveTab(newValue)}
+            aria-label="app tabs"
             sx={{ mb: 3 }}
           >
             <Tab label="データ管理" />
             <Tab label="予測分析" />
+            <Tab label="使い方" />
           </Tabs>
           
           {activeTab === 0 && (
@@ -297,6 +300,10 @@ function App({ basename }) {
               categories={categories}
               salesData={salesData}
             />
+          )}
+          
+          {activeTab === 2 && (
+            <HowToUse />
           )}
         </Box>
         
