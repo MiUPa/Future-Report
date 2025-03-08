@@ -31,7 +31,19 @@ import {
 import 'chartjs-adapter-date-fns';
 import { Line } from 'react-chartjs-2';
 import { ja } from 'date-fns/locale';
-import { calculateSARIMA, calculateETS, calculateProphet, calculateEnsemble } from '../utils/forecastModels';
+import { 
+  simpleExponentialSmoothing, 
+  doubleExponentialSmoothing, 
+  calculateETS, 
+  calculateSARIMA,
+  calculateProphet,
+  calculateLSTM,
+  calculateRandomForest,
+  calculateEnsemble
+} from '../utils/forecastModels';
+
+// 最大予測期間を3ヶ月(90日)に制限
+const MAX_FORECAST_DAYS = 90;
 
 ChartJS.register(
   CategoryScale,
@@ -48,7 +60,17 @@ function ForecastView({ categories, salesData }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [chartData, setChartData] = useState(null);
   const [forecastPeriod, setForecastPeriod] = useState(3); // デフォルトは3ヶ月
-  const [forecastMethod, setForecastMethod] = useState('holt-winters'); // デフォルトはHolt-Winters法
+  const [forecastMethod, setForecastMethod] = useState('holt-winters');
+  const [forecastMethodOptions] = useState([
+    { value: 'ses', label: '単純移動平均' },
+    { value: 'holt', label: 'ホルト法' },
+    { value: 'holt-winters', label: 'ホルト・ウィンターズ法' },
+    { value: 'sarima', label: 'SARIMA' },
+    { value: 'prophet', label: 'Prophet' },
+    { value: 'lstm', label: 'LSTM' },
+    { value: 'random-forest', label: 'ランダムフォレスト' },
+    { value: 'ensemble', label: 'アンサンブルモデル' }
+  ]);
   const [isLoading, setIsLoading] = useState(false); // 予測計算中のローディング状態
   const [dateRange, setDateRange] = useState([0, 100]); // 表示範囲のパーセンテージ (0-100%)
   const [allDates, setAllDates] = useState([]); // すべての日付を保持する状態
@@ -245,43 +267,52 @@ function ForecastView({ categories, salesData }) {
         return null;
       }
 
+      // 予測日数を計算し、最大値を制限
+      const forecastDays = Math.min(forecastPeriod * 30, MAX_FORECAST_DAYS);
+
       // 将来の予測値を計算
       let futurePredictions = [];
       
       // 選択された予測手法に基づいて予測を実行
       if (forecastMethod === 'ses') {
         // 単純指数平滑法（Simple Exponential Smoothing）
-        futurePredictions = calculateSES(values, forecastPeriod * 30); // 月数 × 30日
+        futurePredictions = calculateSES(values, forecastDays);
       } else if (forecastMethod === 'holt') {
         // ホルト法（Holt's Linear Trend Method）
-        futurePredictions = calculateHolt(values, forecastPeriod * 30);
+        futurePredictions = calculateHolt(values, forecastDays);
       } else if (forecastMethod === 'holt-winters') {
         // ホルト・ウィンターズ法（Holt-Winters Method）
-        futurePredictions = calculateHoltWinters(values, forecastPeriod * 30);
+        futurePredictions = calculateHoltWinters(values, forecastDays);
       } else if (forecastMethod === 'sarima') {
         // SARIMA（季節性ARIMA）モデル
-        futurePredictions = await calculateSARIMA(values, forecastPeriod * 30);
+        futurePredictions = await calculateSARIMA(values, forecastDays);
       } else if (forecastMethod === 'ets') {
         // ETS（指数平滑状態空間）モデル
-        futurePredictions = calculateETS(values, forecastPeriod * 30);
+        futurePredictions = calculateETS(values, forecastDays);
       } else if (forecastMethod === 'prophet') {
         // Prophetモデル
-        futurePredictions = await calculateProphet(data, forecastPeriod * 30);
+        futurePredictions = await calculateProphet(data, forecastDays);
+      } else if (forecastMethod === 'lstm') {
+        // LSTMモデル
+        futurePredictions = await calculateLSTM(values, forecastDays);
+      } else if (forecastMethod === 'random-forest') {
+        // ランダムフォレストモデル
+        futurePredictions = calculateRandomForest(values, forecastDays);
       } else if (forecastMethod === 'ensemble') {
         // アンサンブルモデル（複数モデルの組み合わせ）
-        futurePredictions = await calculateEnsemble(values, data, forecastPeriod * 30);
+        futurePredictions = await calculateEnsemble(values, data, forecastDays);
       }
       
       // 将来の日付を生成（日単位）
       const lastDate = new Date(sortedDates[sortedDates.length - 1]);
-      const futureDates = Array.from({ length: forecastPeriod * 30 }, (_, i) => {
+      const futureDates = Array.from({ length: forecastDays }, (_, i) => {
         const date = new Date(lastDate);
         date.setDate(date.getDate() + i + 1); // 日単位で増加
         return date.toISOString().split('T')[0];
       });
 
       // 実績値のデータセット（実際のデータがある期間のみ）
-      const actualData = [...values, ...Array(forecastPeriod * 30).fill(null)];
+      const actualData = [...values, ...Array(forecastDays).fill(null)];
       
       // 予測値のデータセット
       // 最後の実測値の位置から予測値を表示
@@ -372,19 +403,21 @@ function ForecastView({ categories, salesData }) {
   const getModelDescription = () => {
     switch (forecastMethod) {
       case 'ses':
-        return '単純指数平滑法は、過去の値を指数関数的に減衰させた加重平均を使用します。トレンドや季節性を考慮しません。';
+        return '単純移動平均は、過去のデータの重み付き平均を使用する最も基本的な予測方法です。変動の少ないデータに適しています。';
       case 'holt':
         return 'ホルト法は、レベルとトレンドを考慮した予測を行います。季節性は考慮しません。';
       case 'holt-winters':
         return 'ホルト・ウィンターズ法は、レベル、トレンド、季節性を考慮した予測を行います。';
       case 'sarima':
-        return 'SARIMA（季節性自己回帰和分移動平均）モデルは、時系列の自己相関構造と季節性を考慮した統計的モデルです。';
-      case 'ets':
-        return 'ETS（指数平滑状態空間）モデルは、誤差、トレンド、季節性の各要素を自動的に最適化します。';
+        return 'SARIMA（季節性自己回帰和分移動平均）モデルは、時系列データの自己相関を利用した高度な統計モデルです。季節性のあるデータに有効です。';
       case 'prophet':
-        return 'Prophet（Facebook開発）は、トレンド、季節性、休日効果を自動的に検出し、異常値に強いモデルです。';
+        return 'Prophetは、トレンド、季節性、休日効果などを考慮した柔軟な予測モデルです。様々なパターンを持つデータに対応します。';
+      case 'lstm':
+        return 'LSTM（Long Short-Term Memory）は、ディープラーニングの一種で、長期的な依存関係を学習できる高度なモデルです。複雑なパターンに対応します。';
+      case 'random-forest':
+        return 'ランダムフォレストは、複数の決定木を組み合わせた機械学習モデルです。非線形のパターンに強く、過学習に強い特徴があります。';
       case 'ensemble':
-        return 'アンサンブルモデルは、複数の予測モデル（SARIMA、ETS、Prophet）の結果を組み合わせて、より安定した予測を提供します。';
+        return 'アンサンブルモデルは、複数の予測モデル（SARIMA、ETS、Prophet、LSTM、ランダムフォレスト）の結果を組み合わせて、より安定した予測を提供します。';
       default:
         return '';
     }
@@ -395,6 +428,148 @@ function ForecastView({ categories, salesData }) {
     if (!date) return '';
     return date.toISOString().split('T')[0];
   };
+
+  // チャートデータの計算
+  const calculateChartData = useCallback(async () => {
+    if (!selectedCategory || !salesData[selectedCategory]) return;
+
+    try {
+      setIsLoading(true);
+      
+      // 日付順にソートされたデータを取得
+      const sortedDates = Object.keys(salesData[selectedCategory]).sort();
+      if (sortedDates.length === 0) return;
+      
+      const values = sortedDates.map(date => salesData[selectedCategory][date]);
+      
+      // データの検証
+      console.log('予測計算開始:', {
+        カテゴリ: selectedCategory,
+        データ件数: values.length,
+        予測期間: forecastPeriod,
+        予測モデル: forecastMethod,
+        データサンプル: values.slice(0, 5),
+        最小値: Math.min(...values),
+        最大値: Math.max(...values),
+        平均値: values.reduce((a, b) => a + b, 0) / values.length
+      });
+      
+      // ゼロやNaNの確認
+      const hasInvalidData = values.some(v => isNaN(v) || v === null);
+      if (hasInvalidData) {
+        console.warn('無効なデータが含まれています');
+      }
+      
+      // 予測日数を計算し、最大値を制限
+      const forecastDays = Math.min(forecastPeriod * 30, MAX_FORECAST_DAYS);
+      
+      // 選択された予測手法に基づいて予測を実行
+      let forecastValues = [];
+      
+      try {
+        switch (forecastMethod) {
+          case 'ses':
+            forecastValues = calculateSES(values, forecastDays);
+            break;
+          case 'holt':
+            forecastValues = calculateHolt(values, forecastDays);
+            break;
+          case 'holt-winters':
+            forecastValues = calculateHoltWinters(values, forecastDays);
+            break;
+          case 'sarima':
+            forecastValues = await calculateSARIMA(values, forecastDays);
+            break;
+          case 'ets':
+            forecastValues = calculateETS(values, forecastDays);
+            break;
+          case 'prophet':
+            forecastValues = await calculateProphet(salesData[selectedCategory], forecastDays);
+            break;
+          case 'lstm':
+            forecastValues = await calculateLSTM(values, forecastDays);
+            break;
+          case 'random-forest':
+            forecastValues = calculateRandomForest(values, forecastDays);
+            break;
+          case 'ensemble':
+            forecastValues = await calculateEnsemble(values, salesData[selectedCategory], forecastDays);
+            break;
+          default:
+            forecastValues = calculateSES(values, forecastDays);
+        }
+      } catch (error) {
+        console.error('予測モデルエラー:', error);
+        forecastValues = calculateSES(values, forecastDays);
+      }
+      
+      console.log('予測結果:', {
+        予測件数: forecastValues.length,
+        予測結果サンプル: forecastValues.slice(0, 5)
+      });
+      
+      // 将来の日付を生成（日単位）
+      const lastDate = new Date(sortedDates[sortedDates.length - 1]);
+      const futureDates = Array.from({ length: forecastDays }, (_, i) => {
+        const date = new Date(lastDate);
+        date.setDate(date.getDate() + i + 1); // 日単位で増加
+        return date.toISOString().split('T')[0];
+      });
+
+      // 実績値のデータセット（実際のデータがある期間のみ）
+      const actualData = [...values, ...Array(forecastDays).fill(null)];
+      
+      // 予測値のデータセット
+      // 最後の実測値の位置から予測値を表示
+      const predictionData = Array(values.length).fill(null);
+      
+      // 最後の実測値と同じ値から予測線を開始
+      predictionData[values.length - 1] = values[values.length - 1];
+      
+      // 日付を Date オブジェクトに変換
+      const dateObjects = [...sortedDates, ...futureDates].map(dateStr => new Date(dateStr));
+      
+      // すべての日付を保存
+      setAllDates(dateObjects);
+      
+      // チャートデータを作成
+      const newChartData = {
+        labels: dateObjects,
+        datasets: [
+          {
+            label: '実績値',
+            data: actualData.map((value, index) => ({
+              x: dateObjects[index],
+              y: value
+            })).filter(point => point.y !== null),
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1
+          },
+          {
+            label: '予測値',
+            data: [...predictionData, ...forecastValues].map((value, index) => ({
+              x: dateObjects[index],
+              y: value
+            })).filter(point => point.y !== null),
+            borderColor: 'rgb(255, 99, 132)',
+            borderDash: [5, 5],
+            tension: 0.1
+          }
+        ]
+      };
+      
+      setIsLoading(false);
+      setChartData(newChartData);
+    } catch (error) {
+      console.error('チャートデータ計算エラー:', error);
+      setIsLoading(false);
+      setChartData(null);
+    }
+  }, [selectedCategory, salesData, forecastPeriod, forecastMethod, calculateSES, calculateHolt, calculateHoltWinters]);
+
+  useEffect(() => {
+    calculateChartData();
+  }, [calculateChartData]);
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -431,14 +606,14 @@ function ForecastView({ categories, salesData }) {
                 aria-label="forecast period"
                 size="small"
               >
+                <ToggleButton value={1} aria-label="1 month">
+                  1ヶ月
+                </ToggleButton>
+                <ToggleButton value={2} aria-label="2 months">
+                  2ヶ月
+                </ToggleButton>
                 <ToggleButton value={3} aria-label="3 months">
                   3ヶ月
-                </ToggleButton>
-                <ToggleButton value={6} aria-label="6 months">
-                  6ヶ月
-                </ToggleButton>
-                <ToggleButton value={12} aria-label="1 year">
-                  1年
                 </ToggleButton>
               </ToggleButtonGroup>
             </Box>
@@ -455,41 +630,14 @@ function ForecastView({ categories, salesData }) {
                 value={forecastMethod}
                 onChange={handleForecastMethodChange}
               >
-                <FormControlLabel 
-                  value="ses" 
-                  control={<Radio size="small" />} 
-                  label={<Typography variant="body2">単純指数平滑法</Typography>} 
-                />
-                <FormControlLabel 
-                  value="holt" 
-                  control={<Radio size="small" />} 
-                  label={<Typography variant="body2">ホルト法</Typography>} 
-                />
-                <FormControlLabel 
-                  value="holt-winters" 
-                  control={<Radio size="small" />} 
-                  label={<Typography variant="body2">ホルト・ウィンターズ法</Typography>} 
-                />
-                <FormControlLabel 
-                  value="sarima" 
-                  control={<Radio size="small" />} 
-                  label={<Typography variant="body2">SARIMA</Typography>} 
-                />
-                <FormControlLabel 
-                  value="ets" 
-                  control={<Radio size="small" />} 
-                  label={<Typography variant="body2">ETS</Typography>} 
-                />
-                <FormControlLabel 
-                  value="prophet" 
-                  control={<Radio size="small" />} 
-                  label={<Typography variant="body2">Prophet</Typography>} 
-                />
-                <FormControlLabel 
-                  value="ensemble" 
-                  control={<Radio size="small" />} 
-                  label={<Typography variant="body2">アンサンブル</Typography>} 
-                />
+                {forecastMethodOptions.map((option) => (
+                  <FormControlLabel 
+                    key={option.value}
+                    value={option.value} 
+                    control={<Radio size="small" />} 
+                    label={<Typography variant="body2">{option.label}</Typography>} 
+                  />
+                ))}
               </RadioGroup>
             </FormControl>
           </Grid>

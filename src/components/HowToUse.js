@@ -167,8 +167,83 @@ function HowToUse() {
               <BarChartIcon />
             </ListItemIcon>
             <ListItemText 
+              primary="SARIMA" 
+              secondary="季節性自己回帰和分移動平均モデル。時系列データの自己相関を利用した高度な統計モデルで、複雑な季節パターンの予測に優れています。" 
+            />
+          </ListItem>
+          <Divider component="li" />
+          <ListItem>
+            <ListItemIcon>
+              <BarChartIcon />
+            </ListItemIcon>
+            <ListItemText 
+              primary="Prophet" 
+              secondary="Facebookが開発した時系列予測フレームワーク。トレンド、季節性、休日効果などを自動的に検出し、異常値に強いモデルです。" 
+            />
+          </ListItem>
+          <Divider component="li" />
+          <ListItem>
+            <ListItemIcon>
+              <BarChartIcon />
+            </ListItemIcon>
+            <ListItemText 
+              primary="LSTM" 
+              secondary="長短期記憶ニューラルネットワーク。複雑なパターンを学習し、長期的な依存関係を捉えることができるディープラーニングモデルです。" 
+            />
+          </ListItem>
+          <Divider component="li" />
+          <ListItem>
+            <ListItemIcon>
+              <BarChartIcon />
+            </ListItemIcon>
+            <ListItemText 
+              primary="ランダムフォレスト" 
+              secondary="複数の決定木モデルを組み合わせた機械学習アルゴリズム。非線形のパターンに強く、過学習に強い特徴があります。" 
+            />
+          </ListItem>
+          <Divider component="li" />
+          <ListItem>
+            <ListItemIcon>
+              <BarChartIcon />
+            </ListItemIcon>
+            <ListItemText 
               primary="アンサンブルモデル" 
               secondary="複数の予測モデルの結果を組み合わせて、より安定した予測を提供します。多くの場合で高い精度を発揮します。" 
+            />
+          </ListItem>
+        </List>
+      </Paper>
+
+      <Paper elevation={2} sx={{ p: 3, mt: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          予測モデルの選び方
+        </Typography>
+        <Typography paragraph>
+          データの特性に応じて適切なモデルを選択することで、予測精度を向上させることができます：
+        </Typography>
+        <List>
+          <ListItem>
+            <ListItemText 
+              primary="安定したデータ" 
+              secondary="変動が少なく、トレンドや季節性のないデータには単純移動平均やホルト法が適しています。" 
+            />
+          </ListItem>
+          <ListItem>
+            <ListItemText 
+              primary="季節性のあるデータ" 
+              secondary="定期的なパターンを持つデータには、ホルト・ウィンターズ法やSARIMAが効果的です。" 
+            />
+          </ListItem>
+          <ListItem>
+            <ListItemText 
+              primary="複雑なパターンのデータ" 
+              secondary="複雑な変動やパターンを持つデータには、Prophet、LSTM、ランダムフォレストなどの高度なモデルが適しています。" 
+            />
+          </ListItem>
+          <ListItem>
+            <ListItemText 
+              primary="確実性を重視する場合" 
+              secondary="予測の安定性を重視する場合は、アンサンブルモデルが最適です。複数のモデルの予測を組み合わせることで、精度が向上します。" 
             />
           </ListItem>
         </List>

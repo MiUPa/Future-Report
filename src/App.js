@@ -82,143 +82,60 @@ function App({ basename }) {
   const loadSampleData = async () => {
     try {
       console.log('サンプルデータの読み込みを開始します...');
-      console.log('Current basename:', basename);
-      console.log('Current PUBLIC_URL:', process.env.PUBLIC_URL);
       
-      // 絶対パスを使用してサンプルデータにアクセス
-      const csvPath = '/Future-Report/sample/sample.csv';
-      console.log(`サンプルデータのパス: ${csvPath}`);
+      // サンプルデータの作成（実際のCSVファイルの代わりに直接データを生成）
+      const sampleCategories = ['製品A', '製品B', '製品C'];
       
-      try {
-        const response = await fetch(csvPath);
-        console.log('レスポンスステータス:', response.status);
+      // 過去24ヶ月分のサンプルデータを生成
+      const sampleSalesData = {};
+      const today = new Date();
+      
+      // 各カテゴリに対してデータを生成
+      sampleCategories.forEach(category => {
+        sampleSalesData[category] = {};
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        // ベースとなる売上数値（カテゴリごとに異なる）
+        let baseValue = 100;
+        if (category === '製品A') baseValue = 100;
+        if (category === '製品B') baseValue = 200;
+        if (category === '製品C') baseValue = 150;
         
-        const csvText = await response.text();
-        console.log(`CSVデータ取得成功: ${csvText.length} バイト`);
-        
-        if (csvText.length === 0) {
-          throw new Error('CSVデータが空です');
-        }
-        
-        // CSVの最初の数行をログに出力
-        console.log('CSVデータの先頭部分:', csvText.substring(0, 100));
-        
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            console.log(`CSVパース完了: ${results.data.length} 行のデータ`);
-            console.log('最初の数行:', results.data.slice(0, 3));
-            
-            const newSalesData = {};
-            const newCategories = [];
-            
-            // CSVデータを処理
-            results.data.forEach((row, index) => {
-              if (index < 5) {
-                console.log('処理中の行:', row);
-              }
-              
-              const category = row.category;
-              // 日付フォーマットを変換（YYYY/M/D → YYYY-MM-DD）
-              let date = '';
-              if (row.date) {
-                try {
-                  const dateParts = row.date.split('/');
-                  if (dateParts.length === 3) {
-                    // 月と日が1桁の場合は0埋め
-                    const year = dateParts[0];
-                    const month = dateParts[1].padStart(2, '0');
-                    const day = dateParts[2].padStart(2, '0');
-                    date = `${year}-${month}-${day}`;
-                  } else {
-                    date = row.date; // フォーマットが異なる場合はそのまま使用
-                  }
-                } catch (e) {
-                  console.error('日付変換エラー:', e, row.date);
-                  date = row.date; // エラーの場合はそのまま使用
-                }
-              }
-              
-              // salesフィールドを使用
-              const value = parseFloat(row.sales);
-              
-              if (!isNaN(value) && date && category) {
-                if (!newCategories.includes(category)) {
-                  newCategories.push(category);
-                }
-                
-                if (!newSalesData[category]) {
-                  newSalesData[category] = {};
-                }
-                
-                newSalesData[category][date] = value;
-              } else {
-                if (index < 10) {
-                  console.log('無効なデータ行:', row, '値の変換結果:', !isNaN(value), '日付あり:', !!date, 'カテゴリあり:', !!category);
-                }
-              }
-            });
-            
-            console.log(`処理結果: ${newCategories.length} カテゴリー, データポイント数: ${Object.keys(newSalesData).reduce((sum, cat) => sum + Object.keys(newSalesData[cat]).length, 0)}`);
-            console.log('カテゴリー:', newCategories);
-            
-            if (newCategories.length === 0) {
-              console.error('有効なカテゴリーが見つかりませんでした');
-              alert('サンプルデータの処理に失敗しました。有効なデータが見つかりません。');
-              return;
-            }
-            
-            setCategories(newCategories);
-            setSalesData(newSalesData);
-            console.log('サンプルデータを正常に読み込みました');
-            
-            // 予測タブに自動的に切り替え
-            setActiveTab(1);
-          },
-          error: (error) => {
-            console.error('CSVパースエラー:', error);
-            alert('CSVデータの解析に失敗しました。');
-          }
-        });
-      } catch (error) {
-        console.error('サンプルデータの取得エラー:', error);
-        
-        // 代替手段として、ハードコードされたサンプルデータを使用
-        console.log('ハードコードされたサンプルデータを使用します');
-        
-        const sampleCategory = 'サンプル';
-        const newCategories = [sampleCategory];
-        const newSalesData = {
-          [sampleCategory]: {}
-        };
-        
-        // 過去3ヶ月分のサンプルデータを生成
-        const today = new Date();
-        for (let i = 90; i >= 0; i--) {
+        // 過去24ヶ月分のデータを生成
+        for (let i = 0; i < 24; i++) {
           const date = new Date(today);
-          date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD形式
+          date.setMonth(date.getMonth() - (24 - i));
+          const dateKey = date.toISOString().split('T')[0];
           
-          // 乱数で売上データを生成（10〜100の範囲）
-          const sales = Math.floor(Math.random() * 90) + 10;
-          newSalesData[sampleCategory][dateStr] = sales;
+          // 季節性（年間を通して波形）
+          const seasonality = Math.sin((i % 12) / 12 * 2 * Math.PI) * 30;
+          
+          // トレンド（徐々に増加）
+          const trend = i * 2;
+          
+          // ランダム成分
+          const random = Math.floor(Math.random() * 30 - 15);
+          
+          // 最終的な値（負の値は0に補正）
+          const value = Math.max(0, Math.floor(baseValue + seasonality + trend + random));
+          sampleSalesData[category][dateKey] = value;
         }
-        
-        setCategories(newCategories);
-        setSalesData(newSalesData);
-        console.log('サンプルデータを生成しました');
-        
-        // 予測タブに自動的に切り替え
-        setActiveTab(1);
-      }
+      });
+      
+      console.log('生成されたサンプルデータ:', {
+        カテゴリ: sampleCategories,
+        データ例: Object.entries(sampleSalesData['製品A']).slice(0, 5)
+      });
+      
+      // Stateを更新
+      setCategories(sampleCategories);
+      setSalesData(sampleSalesData);
+      
+      // 最初のカテゴリと「予測分析」タブを選択
+      setActiveTab(1); // 予測タブに自動的に切り替え
+      
+      console.log('サンプルデータが正常に読み込まれました');
     } catch (error) {
       console.error('サンプルデータの読み込みエラー:', error);
-      alert('サンプルデータの読み込み中にエラーが発生しました。');
     }
   };
 
