@@ -253,7 +253,7 @@ function App({ basename }) {
         <Box sx={{ my: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h4" component="h1" gutterBottom>
-              需要予測アプリ
+              Future-Report
             </Typography>
             <Box>
               <Button 

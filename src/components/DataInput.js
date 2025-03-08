@@ -124,64 +124,16 @@ function DataInput({ categories, salesData, setSalesData, setCategories }) {
   };
 
   const handleAddData = () => {
-    try {
     if (selectedCategory && selectedDate && quantity) {
       const dateKey = selectedDate.toISOString().split('T')[0];
-        const parsedQuantity = parseInt(quantity, 10);
-        
-        if (isNaN(parsedQuantity)) {
-          setError('数量は有効な数値である必要があります');
-          return;
-        }
-        
-        // 編集モードの場合は古いデータを削除
-        if (editMode && editId) {
-          // 編集前のカテゴリーと日付を取得
-          const [oldCategory, oldDate] = editId.split('-');
-          
-          // 古いデータを削除
-          const newSalesData = { ...salesData };
-          if (newSalesData[oldCategory] && newSalesData[oldCategory][oldDate]) {
-            delete newSalesData[oldCategory][oldDate];
-            
-            // カテゴリーが空になった場合は削除
-            if (Object.keys(newSalesData[oldCategory]).length === 0) {
-              delete newSalesData[oldCategory];
-            }
-          }
-          
-          // 新しいデータを追加
-          if (!newSalesData[selectedCategory]) {
-            newSalesData[selectedCategory] = {};
-          }
-          
-          newSalesData[selectedCategory][dateKey] = parsedQuantity;
-          
-          setSalesData(newSalesData);
-          setEditMode(false);
-          setEditId(null);
-          setEditCategory('');
-          setSuccess('データを更新しました');
-        } else {
-          // 新規追加
       setSalesData({
         ...salesData,
         [selectedCategory]: {
           ...(salesData[selectedCategory] || {}),
-              [dateKey]: parsedQuantity
-            }
-          });
-          setSuccess('データを追加しました');
+          [dateKey]: parseInt(quantity, 10)
         }
-        
-        setQuantity('');
-        setSelectedDate(null);
-        setError(null);
-        setTabValue(1); // データ追加後にテーブルタブに切り替え
-      }
-    } catch (error) {
-      console.error('データ追加エラー:', error);
-      setError('データの追加中にエラーが発生しました');
+      });
+      setQuantity('');
     }
   };
 

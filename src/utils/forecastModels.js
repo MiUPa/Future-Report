@@ -251,4 +251,35 @@ const linearForecast = (values, periods) => {
   
   // 線形予測を実行
   return Array.from({ length: periods }, (_, i) => lastValue + (i + 1) * trend);
+};
+
+export const simpleExponentialSmoothing = (data, alpha = 0.2) => {
+  if (!data || data.length === 0) return [];
+
+  const forecasts = [data[0]];
+  let lastForecast = data[0];
+
+  for (let i = 1; i < data.length; i++) {
+    lastForecast = alpha * data[i] + (1 - alpha) * lastForecast;
+    forecasts.push(lastForecast);
+  }
+
+  return forecasts;
+};
+
+export const doubleExponentialSmoothing = (data, alpha = 0.2, beta = 0.1) => {
+  if (!data || data.length === 0) return [];
+
+  let level = data[0];
+  let trend = data[1] - data[0];
+  const forecasts = [data[0]];
+
+  for (let i = 1; i < data.length; i++) {
+    const lastLevel = level;
+    level = alpha * data[i] + (1 - alpha) * (level + trend);
+    trend = beta * (level - lastLevel) + (1 - beta) * trend;
+    forecasts.push(level + trend);
+  }
+
+  return forecasts;
 }; 
